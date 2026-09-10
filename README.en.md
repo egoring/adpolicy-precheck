@@ -1,6 +1,6 @@
 # adpolicy-precheck
 
-> 한국어: [README.md](README.md) · Design doc: [docs/설계서.md](docs/설계서.md)
+> 한국어: [README.md](README.md) · Design doc: [docs/설계서.md](docs/설계서.md) · Run guide: [docs/실행가이드.md](docs/실행가이드.md)
 
 **Find out why your ad would be rejected — before you submit it.**
 

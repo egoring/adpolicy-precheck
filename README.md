@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/egoring/adpolicy-precheck/actions/workflows/ci.yml/badge.svg)](https://github.com/egoring/adpolicy-precheck/actions/workflows/ci.yml)
 
-> English: [README.en.md](README.en.md) · 설계 문서: [docs/설계서.md](docs/설계서.md)
+> English: [README.en.md](README.en.md) · 설계 문서: [docs/설계서.md](docs/설계서.md) · **실행 가이드: [docs/실행가이드.md](docs/실행가이드.md)**
 
 **광고를 집행하기 전에, 어떤 항목으로 반려될지 미리 알려주는 점검 도구.**
 
@@ -122,6 +122,8 @@ docker compose up --build
 
 - 웹 UI → http://localhost:3000
 - API 문서 → http://localhost:8080/docs
+
+> 포트 충돌·LLM 연결 등 자세한 절차는 **[실행 가이드](docs/실행가이드.md)** 를 보세요.
 
 **LLM 없이도 동작합니다.** 서버가 없거나 꺼져 있으면 결정적 룰셋 결과만 반환하고, 이유를 `llm_note`에 담아 알려 줍니다. 조용히 실패하지 않습니다.
 
