@@ -52,8 +52,8 @@ def test_scoring_is_deterministic():
 # --- 병합·정렬 --------------------------------------------------------------
 
 def test_rule_wins_over_llm_for_same_code():
-    merged = merge([f("AD-GUARANTEE", Severity.BLOCK, Source.RULE)],
-                   [f("AD-GUARANTEE", Severity.BLOCK, Source.LLM)])
+    merged = merge([f("MIS-UNRELIABLE-CLAIMS", Severity.BLOCK, Source.RULE)],
+                   [f("MIS-UNRELIABLE-CLAIMS", Severity.BLOCK, Source.LLM)])
     assert len(merged) == 1
     assert merged[0].source == Source.RULE
 

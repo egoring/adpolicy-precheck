@@ -28,7 +28,7 @@ def codes(findings) -> set[str]:
 
 def test_privacy_missing_when_form_collects_pii():
     s = snap(has_form=True, form_input_types=["email"], text="문의하기 " + "가" * 400)
-    assert "LP-PRIVACY" in codes(check_absence(s, ""))
+    assert "DATA-NO-PRIVACY-POLICY" in codes(check_absence(s, ""))
 
 
 def test_privacy_ok_when_policy_link_present():
@@ -38,62 +38,62 @@ def test_privacy_ok_when_policy_link_present():
         link_texts=["개인정보처리방침"],
         text="문의하기 " + "가" * 400,
     )
-    assert "LP-PRIVACY" not in codes(check_absence(s, ""))
+    assert "DATA-NO-PRIVACY-POLICY" not in codes(check_absence(s, ""))
 
 
 def test_privacy_not_flagged_without_pii_form():
     s = snap(has_form=False)
-    assert "LP-PRIVACY" not in codes(check_absence(s, ""))
+    assert "DATA-NO-PRIVACY-POLICY" not in codes(check_absence(s, ""))
 
 
 @pytest.mark.parametrize("contact", ["02-1234-5678", "help@example.com", "123-45-67890"])
 def test_contact_detected(contact):
     s = snap(text=f"문의 {contact} " + "가" * 400)
-    assert "LP-CONTACT" not in codes(check_absence(s, ""))
+    assert "MIS-BUSINESS-IDENTITY" not in codes(check_absence(s, ""))
 
 
 def test_contact_missing():
-    assert "LP-CONTACT" in codes(check_absence(snap(), ""))
+    assert "MIS-BUSINESS-IDENTITY" in codes(check_absence(snap(), ""))
 
 
 def test_price_required_only_with_commerce_intent():
     without = snap(text="회사 소개입니다 " + "가" * 400)
-    assert "LP-PRICE" not in codes(check_absence(without, ""))
+    assert "MIS-DISHONEST-PRICING" not in codes(check_absence(without, ""))
 
     with_intent = snap(text="지금 구매 하세요 " + "가" * 400)
-    assert "LP-PRICE" in codes(check_absence(with_intent, ""))
+    assert "MIS-DISHONEST-PRICING" in codes(check_absence(with_intent, ""))
 
 
 def test_price_satisfied_by_won_amount():
     s = snap(text="지금 구매 하세요 29,000원 " + "가" * 400)
-    assert "LP-PRICE" not in codes(check_absence(s, ""))
+    assert "MIS-DISHONEST-PRICING" not in codes(check_absence(s, ""))
 
 
 def test_thin_content():
-    assert "LP-THIN" in codes(check_absence(snap(text="짧음"), ""))
+    assert "DEST-INSUFFICIENT-CONTENT" in codes(check_absence(snap(text="짧음"), ""))
 
 
 def test_unreachable_short_circuits_other_checks():
     s = snap(status_code=404, fetch_error="HTTP 404")
     found = check_absence(s, "")
-    assert codes(found) == {"LP-UNREACHABLE"}
+    assert codes(found) == {"DEST-NOT-WORKING"}
 
 
 def test_run_all_stops_on_unreachable():
     s = snap(status_code=500, fetch_error="HTTP 500")
-    assert codes(run_all(s, "100% 보장", Platform.GOOGLE_ADS)) == {"LP-UNREACHABLE"}
+    assert codes(run_all(s, "100% 보장", Platform.GOOGLE_ADS)) == {"DEST-NOT-WORKING"}
 
 
 # --- 기술 요건 ------------------------------------------------------------
 
 def test_cross_domain_redirect_flagged():
     s = snap(url="https://a.com/x", final_url="https://b.com/y")
-    assert "TECH-REDIRECT" in codes(check_technical(s))
+    assert "DEST-MISMATCH" in codes(check_technical(s))
 
 
 def test_http_with_form_flagged():
     s = snap(url="http://a.com", final_url="http://a.com", has_form=True)
-    assert "TECH-HTTPS" in codes(check_technical(s))
+    assert "DATA-INSECURE-COLLECTION" in codes(check_technical(s))
 
 
 def test_missing_alt_flagged():
@@ -106,12 +106,12 @@ def test_missing_alt_flagged():
 @pytest.mark.parametrize(
     "text,code",
     [
-        ("효과 100% 보장 합니다", "AD-GUARANTEE"),
-        ("아토피 완치 사례", "AD-MEDICAL"),
-        ("원금 보장 상품", "AD-FINANCIAL"),
-        ("단 3자리 남음", "AD-URGENCY"),
-        ("업계 1위 브랜드", "AD-SUPERLATIVE"),
-        ("정품급 가방 판매", "AD-COUNTERFEIT"),
+        ("효과 100% 보장 합니다", "MIS-UNRELIABLE-CLAIMS"),
+        ("아토피 완치 사례", "RESTRICT-HEALTHCARE"),
+        ("원금 보장 상품", "RESTRICT-FINANCIAL"),
+        ("단 3자리 남음", "MIS-CLICKBAIT"),
+        ("업계 1위 브랜드", "MIS-SUPERLATIVE"),
+        ("정품급 가방 판매", "PROHIB-COUNTERFEIT"),
     ],
 )
 def test_content_patterns(text, code):
@@ -121,7 +121,7 @@ def test_content_patterns(text, code):
 
 def test_evidence_is_recorded_for_pattern_hits():
     found = check_content_patterns(snap(), "효과 100% 보장", Platform.GOOGLE_ADS)
-    hit = next(f for f in found if f.code == "AD-GUARANTEE")
+    hit = next(f for f in found if f.code == "MIS-UNRELIABLE-CLAIMS")
     assert hit.evidence
     assert hit.source == Source.RULE
 

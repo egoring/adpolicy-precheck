@@ -62,40 +62,40 @@ def test_verify_evidence_rejects_too_short():
 
 def test_hallucinated_finding_is_dropped():
     raw = payload([
-        {"code": "AD-GUARANTEE", "evidence": "100% 보장", "reason": "절대적 표현"},
-        {"code": "AD-MEDICAL", "evidence": "암을 치료합니다", "reason": "의학적 주장"},
+        {"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "100% 보장", "reason": "절대적 표현"},
+        {"code": "RESTRICT-HEALTHCARE", "evidence": "암을 치료합니다", "reason": "의학적 주장"},
     ])
     found, stats, _ = parse_findings(raw, snap(), "", Platform.GOOGLE_ADS)
 
-    assert [f.code for f in found] == ["AD-GUARANTEE"]
+    assert [f.code for f in found] == ["MIS-UNRELIABLE-CLAIMS"]
     assert stats["dropped_no_evidence"] == 1
     assert stats["llm_raw"] == 2
 
 
 def test_unknown_code_is_dropped():
-    raw = payload([{"code": "AD-MADE-UP", "evidence": "100% 보장", "reason": "x"}])
+    raw = payload([{"code": "MIS-MADE-UP", "evidence": "100% 보장", "reason": "x"}])
     found, stats, _ = parse_findings(raw, snap(), "", Platform.GOOGLE_ADS)
     assert found == []
     assert stats["dropped_unknown_code"] == 1
 
 
 def test_evidence_from_ad_copy_is_accepted():
-    raw = payload([{"code": "AD-URGENCY", "evidence": "오늘만 할인", "reason": "긴급성"}])
+    raw = payload([{"code": "MIS-CLICKBAIT", "evidence": "오늘만 할인", "reason": "긴급성"}])
     found, _, _ = parse_findings(raw, snap("평범한 본문"), "오늘만 할인", Platform.GOOGLE_ADS)
-    assert [f.code for f in found] == ["AD-URGENCY"]
+    assert [f.code for f in found] == ["MIS-CLICKBAIT"]
 
 
 def test_duplicate_codes_collapse():
     raw = payload([
-        {"code": "AD-GUARANTEE", "evidence": "100% 보장", "reason": "a"},
-        {"code": "AD-GUARANTEE", "evidence": "효과 100% 보장", "reason": "b"},
+        {"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "100% 보장", "reason": "a"},
+        {"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "효과 100% 보장", "reason": "b"},
     ])
     found, _, _ = parse_findings(raw, snap(), "", Platform.GOOGLE_ADS)
     assert len(found) == 1
 
 
 def test_findings_are_marked_as_llm_source():
-    raw = payload([{"code": "AD-GUARANTEE", "evidence": "100% 보장", "reason": "x"}])
+    raw = payload([{"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "100% 보장", "reason": "x"}])
     found, _, _ = parse_findings(raw, snap(), "", Platform.GOOGLE_ADS)
     assert found[0].source == Source.LLM
 
@@ -146,9 +146,9 @@ async def test_analyze_propagates_llm_error():
 @pytest.mark.asyncio
 async def test_analyze_happy_path():
     client = ScriptedLLM(payload(
-        [{"code": "AD-GUARANTEE", "evidence": "100% 보장", "reason": "절대적 표현"}]
+        [{"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "100% 보장", "reason": "절대적 표현"}]
     ))
     found, stats, analysis, err = await analyze(snap(), "", Platform.GOOGLE_ADS, client)
     assert err == ""
-    assert [f.code for f in found] == ["AD-GUARANTEE"]
+    assert [f.code for f in found] == ["MIS-UNRELIABLE-CLAIMS"]
     assert analysis

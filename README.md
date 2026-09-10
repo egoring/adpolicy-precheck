@@ -42,21 +42,63 @@ def verify_evidence(evidence: str, haystack: str, *, min_len: int = 4) -> bool:
 "stats": { "llm_raw": 4, "dropped_no_evidence": 2, "dropped_unknown_code": 1, "llm_findings_kept": 1 }
 ```
 
-### 2. 부재 감지 — 대부분의 도구가 놓치는 것
+### 2. 클로킹 탐지 — 심사와 사용자에게 다른 콘텐츠가 나가는지
+
+**방향을 분명히 해둡니다.** 이건 클로킹을 *하는* 기능이 아니라 클로킹이 *일어나는지 잡아내는* 기능입니다. 광고 플랫폼이 하는 일과 같은 쪽입니다.
+
+의도적 클로킹만 문제가 아닙니다. 실무에서 더 흔한 건 **사고**입니다.
+
+- WAF·CDN의 봇 차단 규칙이 심사 크롤러를 막음
+- 지역 기반 리디렉션으로 크롤러 위치에 따라 다른 페이지가 나감
+- JS 전용 렌더링이라 크롤러에는 빈 페이지가 보임
+- SEO 목적으로 robots.txt를 막다가 AdsBot까지 차단
+
+같은 URL을 **서로 다른 클라이언트 프로필**(데스크톱·모바일·봇)로 동시에 가져와 본문 유사도를 비교합니다.
+
+```
+시나리오 1 — 봇에게만 다른 콘텐츠     → block  유사도 0%
+시나리오 2 — WAF가 봇만 차단(403)      → block  "브라우저에는 정상, 봇에는 실패"
+시나리오 3 — 반응형으로 약간만 다름     → 정상   유사도 97%
+```
+
+**Googlebot UA를 사칭하지 않습니다.** 크롤러를 흉내내는 건 그 자체로 회색지대이고, 애초에 필요가 없습니다 — 프로필 간 *차이*만 보면 UA 분기는 그대로 드러나니까요. 오히려 정직하게 봇임을 밝힌 UA가 더 좋은 탐지 도구입니다. 사이트가 "봇"을 다르게 대우한다면 그게 바로 찾던 행동이기 때문입니다. 이 원칙은 테스트로 고정돼 있습니다.
+
+```python
+def test_profiles_do_not_impersonate_search_crawlers():
+    for ua in CLIENT_PROFILES.values():
+        assert "googlebot" not in ua.lower()
+        assert "adsbot" not in ua.lower()
+```
+
+`robots.txt`도 확인합니다. **AdsBot-Google은 전역 `User-agent: *` 규칙을 따르지 않는다**는 점이 중요해서, AdsBot을 명시적으로 `Disallow`한 경우만 차단으로 판정합니다.
+
+### 3. 부재 감지 — 대부분의 도구가 놓치는 것
 
 금지어를 찾는 건 쉽습니다. 어려운 건 **있어야 하는데 없는 것**이고, 실무 반려 사유는 오히려 이쪽이 많습니다.
 
 | 코드 | 무엇을 잡는가 | 조건부 판정 |
 |---|---|---|
-| `LP-PRIVACY` | 개인정보처리방침 없음 | 입력 폼이 개인정보를 수집할 때만 |
-| `LP-CONTACT` | 연락처·사업자 정보 없음 | 전화·이메일·사업자번호 전부 없을 때 |
-| `LP-PRICE` | 가격 미표시 | 구매 유도 문구가 있을 때만 |
-| `LP-THIN` | 콘텐츠 부족 | 본문 300자 미만 |
-| `LP-UNREACHABLE` | 페이지 접근 불가 | 4xx/5xx/타임아웃 |
+| `DATA-NO-PRIVACY-POLICY` | 개인정보처리방침 없음 | 입력 폼이 개인정보를 수집할 때만 |
+| `MIS-BUSINESS-IDENTITY` | 연락처·사업자 정보 없음 | 전화·이메일·사업자번호 전부 없을 때 |
+| `MIS-DISHONEST-PRICING` | 가격 미표시 | 구매 유도 문구가 있을 때만 |
+| `DEST-INSUFFICIENT-CONTENT` | 독자적 콘텐츠 부족 | 본문 300자 미만 |
+| `DEST-NOT-WORKING` | 방문 페이지 작동 불가 | 4xx/5xx/타임아웃 |
 
-맥락 없이 무조건 지적하지 않습니다. 회사 소개 페이지에 가격이 없는 건 정상이므로, **구매 유도 문구가 있을 때만** `LP-PRICE`를 올립니다.
+맥락 없이 무조건 지적하지 않습니다. 회사 소개 페이지에 가격이 없는 건 정상이므로, **구매 유도 문구가 있을 때만** 가격 항목을 올립니다.
 
-### 3. Chain-of-Thought 강제
+### 4. 광고 ↔ 방문 페이지 대조
+
+공식 정책의 **Unclear relevance**(관련성 부족)와 **Unavailable offers**(약속한 혜택 부재)는 광고 문구와 페이지를 *함께* 봐야만 잡을 수 있습니다.
+
+```
+광고: "지금 30% 할인 유기농 원두 커피 로스팅 배송"
+페이지: 자동차 정비소 소개
+
+[warn] MIS-UNCLEAR-RELEVANCE   | "로스팅, 배송, 원두, 유기농, 지금"
+[warn] MIS-UNAVAILABLE-OFFER   | "30% 할인"
+```
+
+### 5. Chain-of-Thought 강제
 
 7B급 모델에 "JSON만 출력하라"고 하면 사고 과정 없이 결론부터 뱉어 환각이 늘어납니다. 스키마에 `analysis`를 **먼저** 두어 근거를 적은 뒤 판정하게 순서를 고정했습니다.
 
@@ -120,23 +162,38 @@ OpenAI 호환 엔드포인트면 무엇이든 됩니다.
 {
   "verdict": "fail",
   "score": 41,
-  "summary": "게재 거부 위험이 큰 항목 2건이 발견되었습니다. 가장 시급한 것은 '절대적·보장성 표현'입니다.",
+  "summary": "게재 거부 위험이 큰 항목 2건이 발견되었습니다.",
   "findings": [
     {
-      "code": "AD-GUARANTEE",
-      "title": "절대적·보장성 표현",
+      "code": "MIS-UNRELIABLE-CLAIMS",
+      "title": "신뢰할 수 없는 주장",
       "severity": "block",
       "source": "rule",
-      "detail": "'100% 보장' 같은 절대적 효과 주장은 허위·과장 광고로 분류된다.",
+      "detail": "일어나기 어려운 결과를 유력한 결과인 것처럼 제시해 사용자를 유인하는 표현은 금지된다.",
       "evidence": "100% 보장",
       "fix": "'개인차가 있습니다' 등 한정 표현으로 바꾸거나 근거를 제시하세요."
     }
   ],
-  "stats": { "rule_findings": 2, "llm_findings_kept": 0, "dropped_no_evidence": 1 }
+  "stats": { "rule_findings": 2, "llm_findings_kept": 0, "dropped_no_evidence": 1, "profiles_probed": 3 }
 }
 ```
 
 `source`를 반드시 확인하세요. `rule`은 코드가 확정한 것이고, `llm`은 근거 검증을 통과한 모델 판단입니다. 점수 계산에서도 가중치가 다릅니다(LLM 0.7배).
+
+### 정책 코드 체계
+
+코드는 **Google Ads 공식 정책 분류**를 따릅니다. 임의로 만든 이름이 아니라 심사에 실제로 쓰이는 용어입니다.
+
+| 접두사 | 공식 분류 | 출처 |
+|---|---|---|
+| `DEST-` | 편집 및 기술 요건 → 방문 페이지 요건 | [answer/6368661](https://support.google.com/adspolicy/answer/6368661) |
+| `MIS-` | 금지된 행위 → 허위 진술 | [answer/6020955](https://support.google.com/adspolicy/answer/6020955) |
+| `ABUSE-` | 금지된 행위 → 광고 네트워크 악용 | [answer/6020954](https://support.google.com/adspolicy/answer/6020954) |
+| `DATA-` | 금지된 행위 → 데이터 수집 및 사용 | [answer/6008942](https://support.google.com/adspolicy/answer/6008942) |
+| `PROHIB-` / `RESTRICT-` | 금지된 콘텐츠 · 제한된 콘텐츠 | [answer/6008942](https://support.google.com/adspolicy/answer/6008942) |
+
+`GET /v1/policies`가 각 항목의 `official_name`과 `source` URL을 함께 돌려줍니다.
+
 
 ### 그 밖의 엔드포인트
 
@@ -155,13 +212,14 @@ adpolicy-precheck/
 │   ├── src/adpolicy/
 │   │   ├── models.py           스키마 — 모든 Finding은 evidence를 가진다
 │   │   ├── policies.py         정책 카탈로그 (무엇을 볼 것인가)
-│   │   ├── rules.py            결정적 룰셋 (부재 감지 + 패턴)
+│   │   ├── rules.py            결정적 룰셋 (부재 감지 + 광고↔페이지 대조 + 패턴)
+│   │   ├── cloaking.py         클로킹 **탐지** — 프로필 간 콘텐츠 분기 비교
 │   │   ├── fetcher.py          페이지 수집 + SSRF 방어
 │   │   ├── llm.py              OpenAI 호환 클라이언트
 │   │   ├── analyzer.py         CoT 프롬프트 + evidence 역검증
 │   │   ├── scoring.py          점수·판정 (결정적)
 │   │   └── main.py             API
-│   └── tests/                  59건 — 네트워크 없이 실행
+│   └── tests/                  89건 — 네트워크 없이 실행
 └── web/                        Next.js 14 (App Router)
 ```
 
@@ -169,7 +227,7 @@ adpolicy-precheck/
 
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
-# 59 passed
+# 89 passed
 ```
 
 네트워크 없이 돕니다. LLM은 각본형 모의 객체(`ScriptedLLM`)로 대체하고, HTML 추출은 고정 문자열로 검증합니다. 가장 중요한 테스트는 **환각 evidence가 실제로 폐기되는지**입니다.
@@ -177,12 +235,12 @@ cd api && pip install -e ".[dev]" && pytest -q
 ```python
 def test_hallucinated_finding_is_dropped():
     raw = payload([
-        {"code": "AD-GUARANTEE", "evidence": "100% 보장", "reason": "절대적 표현"},
-        {"code": "AD-MEDICAL", "evidence": "암을 치료합니다", "reason": "의학적 주장"},
+        {"code": "MIS-UNRELIABLE-CLAIMS", "evidence": "100% 보장", "reason": "신뢰할 수 없는 주장"},
+        {"code": "RESTRICT-HEALTHCARE", "evidence": "암을 치료합니다", "reason": "의학적 주장"},
     ])
     found, stats, _ = parse_findings(raw, snap(), "", Platform.GOOGLE_ADS)
 
-    assert [f.code for f in found] == ["AD-GUARANTEE"]   # 페이지에 있는 것만 남는다
+    assert [f.code for f in found] == ["MIS-UNRELIABLE-CLAIMS"]   # 페이지에 있는 것만 남는다
     assert stats["dropped_no_evidence"] == 1
 ```
 
@@ -191,12 +249,14 @@ def test_hallucinated_finding_is_dropped():
 ## 이 도구가 하지 않는 것
 
 - **심사 통과를 보장하지 않습니다.** 공개된 정책과 실무 반려 사례를 바탕으로 한 사전 점검 보조 도구이며, 최종 판단은 각 플랫폼의 공식 정책과 심사 결과를 따릅니다.
-- **심사 회피를 돕지 않습니다.** 크롤러 탐지, 클로킹, 심사용/사용자용 페이지 분기 같은 기능은 넣지 않았고 앞으로도 넣지 않습니다. 이 도구의 목적은 **정책을 지키도록 돕는 것**이지 우회하는 것이 아닙니다.
+- **심사 회피를 돕지 않습니다.** 클로킹 *탐지*는 넣었지만 클로킹 *수행*은 넣지 않았고 앞으로도 넣지 않습니다. 둘은 정반대 방향입니다 — 전자는 광고주가 사고를 미리 발견하게 하고, 후자는 심사를 속입니다. 크롤러 IP 목록 수집, 심사용/사용자용 페이지 분기 같은 기능은 이 저장소의 범위 밖입니다.
 - **법률 자문이 아닙니다.** 표시광고법·의료법 등 국내 규제가 얽힌 사안은 전문가 검토가 필요합니다.
 
 ## 설계상의 한계
 
-- 정책은 수시로 바뀌므로 `policies.py`의 카탈로그는 주기적 갱신이 필요합니다.
+- 정책은 수시로 바뀌므로 `policies.py`의 카탈로그는 주기적 갱신이 필요합니다(현재 2026-09 기준).
+- 클로킹 탐지는 **서버 응답 차이**만 봅니다. JS 실행 후 렌더링 결과가 갈리는 경우는 헤드리스 수집이 필요합니다.
+- 지역 기반 클로킹은 단일 출발지에서 검사하므로 잡히지 않습니다. 다중 리전 프로브가 다음 단계입니다.
 - 현재 텍스트 기반입니다. 이미지 내부 문구(배너에 박힌 "100% 보장")는 잡지 못합니다 — VLM 연동이 다음 과제입니다.
 - JS로 렌더링되는 SPA는 초기 HTML만 읽습니다. 헤드리스 브라우저 수집이 필요할 수 있습니다.
 - 한국어 패턴 중심입니다. 다국어는 `rules.py`의 정규식 확장이 필요합니다.

@@ -38,21 +38,39 @@ Every discard is reported in `stats`:
 "stats": { "llm_raw": 4, "dropped_no_evidence": 2, "dropped_unknown_code": 1, "llm_findings_kept": 1 }
 ```
 
-### 2. Absence detection — what most tools miss
+### 2. Cloaking detection — is review seeing something different?
+
+**Direction matters.** This *detects* cloaking; it does not perform it. It sits on the same side as the ad platform.
+
+Deliberate cloaking isn't the common case — accidents are: WAF bot rules blocking review crawlers, geo-redirects, JS-only rendering, or a robots.txt that blocks AdsBot while aiming at SEO scrapers.
+
+The same URL is fetched with **distinct client profiles** (desktop, mobile, bot) and body similarity is compared. A page that answers browsers but fails for the bot is flagged immediately.
+
+**Googlebot's UA is never impersonated.** Detection doesn't need it — divergence between *any* two distinct profiles reveals UA branching. An honestly-identified bot UA is in fact the better probe: if a site treats "a bot" differently, that is exactly the behaviour we're looking for. A test pins this down.
+
+```python
+def test_profiles_do_not_impersonate_search_crawlers():
+    for ua in CLIENT_PROFILES.values():
+        assert "googlebot" not in ua.lower()
+```
+
+`robots.txt` is checked separately. AdsBot-Google does **not** follow the global `User-agent: *` rule, so only an explicit AdsBot `Disallow` counts.
+
+### 3. Absence detection — what most tools miss
 
 Finding banned words is easy. Finding **what should be there but isn't** is hard — and in practice that's where most rejections come from.
 
 | Code | Detects | Conditional on |
 |---|---|---|
-| `LP-PRIVACY` | No privacy policy | Only when a form collects personal data |
-| `LP-CONTACT` | No contact / business info | No phone, email or registration number |
-| `LP-PRICE` | No pricing shown | Only when purchase intent is present |
-| `LP-THIN` | Thin content | Body text under 300 chars |
-| `LP-UNREACHABLE` | Page not reachable | 4xx / 5xx / timeout |
+| `DATA-NO-PRIVACY-POLICY` | No privacy policy | Only when a form collects personal data |
+| `MIS-BUSINESS-IDENTITY` | No contact / business info | No phone, email or registration number |
+| `MIS-DISHONEST-PRICING` | No pricing shown | Only when purchase intent is present |
+| `DEST-INSUFFICIENT-CONTENT` | Thin content | Body text under 300 chars |
+| `DEST-NOT-WORKING` | Page not reachable | 4xx / 5xx / timeout |
 
 These are context-aware. A company profile page legitimately has no price, so `LP-PRICE` fires **only when purchase-intent copy exists**.
 
-### 3. Forced chain-of-thought
+### 4. Forced chain-of-thought
 
 Asking a 7B model for "JSON only" makes it jump to conclusions and hallucinate more. The schema puts `analysis` **first**, so the model reasons before it judges.
 
@@ -102,7 +120,7 @@ Always check `source` on each finding: `rule` was decided by code, `llm` is a mo
 
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
-# 59 passed
+# 89 passed
 ```
 
 No network required — the LLM is replaced by a scripted mock, HTML extraction is verified against fixed strings. The most important test is whether **hallucinated evidence is actually discarded**.
@@ -112,12 +130,14 @@ No network required — the LLM is replaced by a scripted mock, HTML extraction 
 ## What this tool does not do
 
 - **It does not guarantee approval.** It is a pre-check aid based on published policies and observed rejection patterns. Platform policy and review decisions are authoritative.
-- **It does not help evade review.** No crawler detection, no cloaking, no serving different content to reviewers — not now, not later. The purpose is to help you *comply*, not to get around the rules.
+- **It does not help evade review.** It *detects* cloaking; it does not *perform* it. These are opposite directions — detection helps an advertiser find an accident before the platform does; performing it deceives review. Crawler IP harvesting and reviewer/user page branching are out of scope, permanently.
 - **It is not legal advice.** Regulated categories need professional review.
 
 ## Known limits
 
-- Policy catalogues drift; `policies.py` needs periodic updates.
+- Policy codes follow the official Google Ads taxonomy (`DEST-`, `MIS-`, `ABUSE-`, `DATA-`, `PROHIB-`/`RESTRICT-`); each item carries its `official_name` and `source` URL. Catalogues still drift — `policies.py` needs periodic updates (current as of 2026-09).
+- Cloaking detection compares **server responses** only; divergence that appears after JS execution needs headless collection.
+- Geo-based cloaking is invisible from a single origin — multi-region probing is the next step.
 - Text-only today — claims baked into banner images aren't caught. VLM integration is the next step.
 - JS-rendered SPAs are read as initial HTML only; headless collection may be needed.
 - Patterns are Korean-first; other languages need regex extension.
