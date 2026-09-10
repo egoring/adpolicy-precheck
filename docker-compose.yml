@@ -19,6 +19,36 @@ services:
       timeout: 3s
       retries: 5
 
+  # 선택 사항 — 로컬 HuggingFace 캐시의 모델을 그대로 서빙합니다.
+  # 기본으로는 뜨지 않습니다.  띄우려면:  docker compose --profile llm up --build
+  # 요구사항: NVIDIA GPU + Docker Desktop의 GPU 지원(WSL2 백엔드)
+  llm:
+    profiles: ["llm"]
+    image: vllm/vllm-openai:latest
+    container_name: adpolicy-llm
+    ports:
+      - "8000:8000"
+    volumes:
+      # 호스트의 HF 캐시 루트(= hub 폴더의 부모)를 그대로 마운트
+      - ${HF_HOME_HOST:-F:/huggingface_cache}:/hf-cache
+    environment:
+      HF_HOME: /hf-cache
+      # 캐시에 있는 모델만 쓰고 네트워크로 내려받지 않음
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+    command: >
+      --model ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      --served-model-name ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      --max-model-len ${LLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${LLM_GPU_UTIL:-0.90}
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   web:
     build:
       context: ./web

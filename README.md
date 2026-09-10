@@ -139,9 +139,22 @@ OpenAI 호환 엔드포인트면 무엇이든 됩니다.
 
 | 백엔드 | `LLM_BASE_URL` |
 |---|---|
-| 로컬 vLLM | `http://host.docker.internal:8000/v1` |
+| compose `llm` 프로필 | `http://llm:8000/v1` |
+| 호스트 vLLM | `http://host.docker.internal:8000/v1` |
 | Ollama | `http://host.docker.internal:11434/v1` |
 | OpenAI | `https://api.openai.com/v1` (+ `LLM_API_KEY`) |
+
+이미 받아둔 HuggingFace 캐시가 있으면 compose가 그대로 서빙합니다. `.env`에 캐시 **루트**(`hub`의 부모)를 적고 프로필을 켜면 됩니다.
+
+```bash
+HF_HOME_HOST=F:/huggingface_cache        # F:\huggingface_cache\hub 인 경우
+LLM_BASE_URL=http://llm:8000/v1
+LLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
+
+docker compose --profile llm up --build
+```
+
+`HF_HUB_OFFLINE=1`이 기본이라 캐시에 있는 모델만 쓰고 새로 내려받지 않습니다. NVIDIA GPU가 필요하며, 없으면 Ollama나 룰셋 전용(`use_llm: false`)으로 쓰면 됩니다. 자세한 건 [실행가이드](docs/실행가이드.md#2-1-로컬-huggingface-캐시의-모델-그대로-쓰기).
 
 ---
 

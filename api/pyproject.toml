@@ -2,7 +2,6 @@
 name = "adpolicy-precheck"
 version = "0.1.0"
 description = "광고 게재 전 랜딩페이지·문구 정책 위반 사전 점검"
-readme = "../README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
