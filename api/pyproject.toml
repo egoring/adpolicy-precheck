@@ -1,6 +1,6 @@
 [project]
 name = "adpolicy-precheck"
-version = "0.1.0"
+version = "0.2.0"
 description = "광고 게재 전 랜딩페이지·문구 정책 위반 사전 점검"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -10,13 +10,26 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.6",
     "selectolax>=0.3.21",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]
+# 한국어 OCR을 PaddleOCR로 돌릴 때만 필요하다. 의존성이 1GB를 넘어서
+# 기본 설치에는 넣지 않는다 — 없으면 tesseract로 내려간다.
+# paddleocr 3.x는 API가 완전히 달라져서(.predict, dict 반환) 2.9 계열로 고정한다.
+paddle = [
+    "paddlepaddle>=3.0,<4",
+    "paddleocr>=2.9,<3",
+]
+# MCP 서버로 띄울 때만 필요하다. HTTP API만 쓸 거면 없어도 된다.
+mcp = [
+    "mcp>=1.2,<2",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
+    "mcp>=1.2,<2",
 ]
 
 [build-system]
@@ -27,7 +40,7 @@ build-backend = "hatchling.build"
 packages = ["src/adpolicy"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "../bridge"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
