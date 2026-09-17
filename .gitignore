@@ -19,3 +19,15 @@ next-env.d.ts
 *.log
 .DS_Store
 tsconfig.tsbuildinfo
+
+# 커버리지 산출물
+.coverage
+.coverage.*
+htmlcov/
+
+# Claude 다리가 남기는 토큰 사용량 장부 (로컬 기록)
+usage.jsonl
+
+# 점검 이력 (로컬 기록)
+data/
+history.jsonl
