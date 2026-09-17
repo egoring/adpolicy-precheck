@@ -1,7 +1,11 @@
 services:
   api:
-    build: ./api
-    container_name: adpolicy-api
+    build:
+      context: ./api
+      args:
+        # 0으로 두면 PaddleOCR을 빼고 빌드한다 (이미지 ~1.5GB 감소, tesseract만)
+        WITH_PADDLE: ${WITH_PADDLE:-1}
+        PADDLE_REQUIRED: ${PADDLE_REQUIRED:-0}
     ports:
       - "8080:8080"
     environment:
@@ -11,6 +15,33 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-not-needed}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # 이미지 점검 — OCR은 컨테이너 안에 tesseract가 있어 바로 동작한다.
+      MAX_IMAGES: ${MAX_IMAGES:-8}
+      MAX_IMAGE_BYTES: ${MAX_IMAGE_BYTES:-5000000}
+      # auto = PaddleOCR 한국어 모델이 있으면 그것, 없으면 tesseract
+      OCR_ENGINE: ${OCR_ENGINE:-auto}
+      OCR_LANGS: ${OCR_LANGS:-kor+eng}
+      MAX_TOTAL_IMAGE_BYTES: ${MAX_TOTAL_IMAGE_BYTES:-20000000}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      MIN_IMAGE_BYTES: ${MIN_IMAGE_BYTES:-3000}
+      MIN_IMAGE_SIDE: ${MIN_IMAGE_SIDE:-150}
+      OCR_TIMEOUT: ${OCR_TIMEOUT:-12}
+      OCR_BUDGET: ${OCR_BUDGET:-25}
+      OCR_PAGE_BUDGET: ${OCR_PAGE_BUDGET:-90}
+      OCR_MIN_LINE_CONF: ${OCR_MIN_LINE_CONF:-55}
+      OCR_CONCURRENCY: ${OCR_CONCURRENCY:-2}
+      OCR_TEXT_PREVIEW: ${OCR_TEXT_PREVIEW:-600}
+      # 한 번의 점검이 넘기면 504로 끊는 전체 상한(초)
+      CHECK_DEADLINE: ${CHECK_DEADLINE:-180}
+      # 점검 이력. 볼륨으로 빼야 재빌드해도 남는다 — 남지 않으면
+      # "지난 점검과 비교"가 매번 첫 점검이 되어 아무 쓸모가 없다.
+      CHECK_HISTORY_LOG: ${CHECK_HISTORY_LOG:-/app/data/history.jsonl}
+      CHECK_HISTORY_KEEP: ${CHECK_HISTORY_KEEP:-20}
+      # 이미지 "자체" 판정용 멀티모달 엔드포인트. 비워두면 그 단계만 빠진다.
+      VLM_BASE_URL: ${VLM_BASE_URL:-}
+      VLM_MODEL: ${VLM_MODEL:-}
+    volumes:
+      - ./data:/app/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -20,21 +51,27 @@ services:
       retries: 5
 
   # 선택 사항 — 로컬 HuggingFace 캐시의 모델을 그대로 서빙합니다.
-  # 기본으로는 뜨지 않습니다.  띄우려면:  docker compose --profile llm up --build
+  # 기본으로는 뜨지 않습니다.  .env의 COMPOSE_PROFILES에 llm 을 넣으면 함께 뜹니다.
   # 요구사항: NVIDIA GPU + Docker Desktop의 GPU 지원(WSL2 백엔드)
   llm:
     profiles: ["llm"]
     image: vllm/vllm-openai:latest
-    container_name: adpolicy-llm
     ports:
       - "8000:8000"
     volumes:
       # 호스트의 HF 캐시 루트(= hub 폴더의 부모)를 그대로 마운트
-      - ${HF_HOME_HOST:-F:/huggingface_cache}:/hf-cache
+      - ${HF_HOME_HOST:-./hf-cache}:/hf-cache
     environment:
       HF_HOME: /hf-cache
       # 캐시에 있는 모델만 쓰고 네트워크로 내려받지 않음
       HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+      # WSL2(Docker Desktop)에서는 pinned memory가 기본 비활성이라
+      # Model Runner V2가 "RuntimeError: UVA is not available"로 죽습니다.
+      # 커널 4.19.121 이상이면 이 플래그로 켜집니다.
+      VLLM_WSL2_ENABLE_PIN_MEMORY: ${VLLM_WSL2_ENABLE_PIN_MEMORY:-1}
+      # 그래도 UVA가 안 잡히면 호스트에서 VLLM_USE_V2_MODEL_RUNNER=0 으로
+      # V1 러너로 내려가면 됩니다. 값을 안 주면 컨테이너에 전달되지 않습니다.
+      VLLM_USE_V2_MODEL_RUNNER:
     command: >
       --model ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
       --served-model-name ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
@@ -49,12 +86,41 @@ services:
               count: all
               capabilities: [gpu]
 
+  # 선택 사항 — 이미지 "자체"를 판정할 멀티모달 모델.
+  # .env의 COMPOSE_PROFILES=llm,vlm 로 켭니다.
+  # .env에 VLM_BASE_URL=http://vlm:8000/v1 을 함께 넣어야 api가 호출합니다.
+  # llm과 GPU를 나눠 쓰므로 VRAM을 확인하세요 (아래 기본값은 30%).
+  vlm:
+    profiles: ["vlm"]
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - ${HF_HOME_HOST:-./hf-cache}:/hf-cache
+    environment:
+      HF_HOME: /hf-cache
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+      VLLM_WSL2_ENABLE_PIN_MEMORY: ${VLLM_WSL2_ENABLE_PIN_MEMORY:-1}
+      VLLM_USE_V2_MODEL_RUNNER:
+    command: >
+      --model ${VLM_SERVE_MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}
+      --served-model-name ${VLM_SERVE_MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}
+      --max-model-len ${VLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${VLM_GPU_UTIL:-0.30}
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   web:
     build:
       context: ./web
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
-    container_name: adpolicy-web
     ports:
       - "3000:3000"
     environment:
