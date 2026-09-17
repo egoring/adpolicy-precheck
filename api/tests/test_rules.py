@@ -48,12 +48,20 @@ def test_privacy_not_flagged_without_pii_form():
 
 @pytest.mark.parametrize("contact", ["02-1234-5678", "help@example.com", "123-45-67890"])
 def test_contact_detected(contact):
-    s = snap(text=f"문의 {contact} " + "가" * 400)
+    s = snap(text=f"지금 구매하세요 29,000원 문의 {contact} " + "가" * 400)
     assert "MIS-BUSINESS-IDENTITY" not in codes(check_absence(s, ""))
 
 
 def test_contact_missing():
-    assert "MIS-BUSINESS-IDENTITY" in codes(check_absence(snap(), ""))
+    """거래하는 페이지에 사업자 정보가 없으면 지적한다."""
+    s = snap(text="지금 구매하세요 29,000원 " + "가" * 400)
+    assert "MIS-BUSINESS-IDENTITY" in codes(check_absence(s, ""))
+
+
+def test_contact_not_required_on_an_informational_page():
+    """정보성 랜딩까지 걸면, 가격·방침을 조건부로 판정한 이유가 무색해진다."""
+    s = snap(text="원두 보관법 안내입니다 " + "가" * 400)
+    assert "MIS-BUSINESS-IDENTITY" not in codes(check_absence(s, ""))
 
 
 def test_price_required_only_with_commerce_intent():

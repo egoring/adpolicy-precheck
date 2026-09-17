@@ -101,6 +101,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .chip.rule { border-color: var(--accent); color: var(--accent); }
 .chip.llm { border-color: var(--info); color: var(--info); }
+.chip.ocr { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); }
+.chip.vlm { background: var(--bg); color: var(--muted); border: 1px dashed var(--line); }
 
 /* gauge */
 .gauge { position: relative; width: 128px; height: 128px; flex: none; }
@@ -136,7 +138,21 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .badge.sev-warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 .badge.sev-info { background: color-mix(in srgb, var(--info) 16%, transparent); color: var(--info); }
 .badge.src-rule { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.badge.src-ocr { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); }
 .badge.src-llm { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.badge.src-vlm { background: var(--bg); color: var(--muted); border: 1px dashed var(--line); }
+/* 역검증이 불가능한 판단이라는 표시 — 사용자가 그냥 믿으면 안 된다. */
+.badge.needs-check { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.evidence.image-source a { color: var(--muted); font-size: 0.86em; word-break: break-all; }
+/* 배너가 여러 장이면 주소를 다 늘어놓지 않고 '1번 2번 3번'으로 접는다.
+   병원 랜딩페이지는 같은 지적이 8장에서 나와서, 주소를 다 쓰면 카드가
+   주소 목록이 되어 버린다. */
+.image-links { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.image-links a {
+  padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px;
+  text-decoration: none;
+}
+.image-links a:hover { border-color: var(--muted); }
 .code { margin-left: auto; font-size: .74rem; color: var(--muted); }
 
 .detail { margin: 0; color: var(--muted); font-size: .92rem; }
@@ -149,3 +165,195 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 .empty { color: var(--muted); }
 .disclaimer { font-size: .82rem; color: var(--muted); margin: 6px 0 0; }
+
+/* --- 이미지 점검 패널 --- */
+.card.images { margin-top: 16px; }
+.images-head h3 { margin: 0 0 4px; font-size: 1rem; }
+.image-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.image-list > li {
+  display: grid; grid-template-columns: 120px 1fr; gap: 14px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+}
+.image-list > li.flagged { border-color: var(--block); }
+.thumb { display: block; }
+.thumb img {
+  width: 100%; height: auto; max-height: 120px; object-fit: contain;
+  border-radius: 6px; background: var(--line);
+}
+.image-body { min-width: 0; }
+.image-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 8px; }
+.image-meta .dim { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge.clean { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+/* 읽은 원문 — 줄바꿈을 살려야 배너 구조가 그대로 보인다 */
+.ocr {
+  margin: 0; padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--line) 35%, transparent);
+  font-size: 0.86rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  max-height: 220px; overflow: auto;
+}
+.ocr-none { margin: 0; font-size: 0.86rem; color: var(--muted); }
+.image-url {
+  display: inline-block; margin-top: 8px;
+  font-size: 0.76rem; color: var(--muted); word-break: break-all;
+}
+.vlm-status {
+  margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line);
+  font-size: 0.86rem; color: var(--muted);
+}
+.vlm-status strong { color: var(--ink); margin-right: 6px; }
+.vlm-status.on strong { color: var(--accent); }
+
+@media (max-width: 560px) {
+  .image-list > li { grid-template-columns: 1fr; }
+  .thumb img { max-height: 180px; }
+}
+
+
+/* --- 감사에서 나온 수정 --- */
+/* 다크모드에서 --accent가 밝아져 흰 글씨 대비가 2.5:1까지 떨어졌다.
+   버튼 글자색을 배경에 맞춰 뒤집는다. */
+button[type="submit"] { color: #fff; }
+@media (prefers-color-scheme: dark) {
+  button[type="submit"] { color: #10131c; }
+}
+
+.actions { display: flex; gap: 10px; align-items: center; }
+.actions button[type="submit"] { flex: 1; }
+button.ghost {
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--line); padding: 12px 18px;
+  border-radius: 10px; font-size: 0.92rem; cursor: pointer;
+}
+button.ghost:hover { color: var(--ink); border-color: var(--muted); }
+.progress { margin: 10px 0 0; font-size: 0.86rem; color: var(--muted); }
+
+/* --- 계정 정지 위험 (반려 점수와 다른 축) --- */
+.account-risk { border-left: 4px solid var(--line); }
+.account-risk.tone-danger { border-left-color: var(--block); background: color-mix(in srgb, var(--block) 6%, var(--surface)); }
+.account-risk.tone-caution { border-left-color: var(--warn); }
+.account-risk header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.badge.risk-danger { background: var(--block); color: #fff; }
+.badge.risk-caution { background: var(--warn); color: #222; }
+.badge.risk-ok { background: color-mix(in srgb, var(--pass) 18%, transparent); color: var(--pass); }
+.risk-count { font-size: .78rem; color: var(--muted); }
+.risk-note { margin: 10px 0 0; font-size: .92rem; }
+.risk-codes { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.risk-codes code { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
+
+/* --- 토큰 사용량 대시보드 --- */
+.nav { margin: 8px 0 0; font-size: .86rem; }
+.range-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+.range-tabs button {
+  padding: 5px 12px; font-size: .82rem; border: 1px solid var(--line);
+  background: var(--surface); color: var(--muted); border-radius: 999px; cursor: pointer;
+}
+.range-tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.range-tabs .refresh { margin-left: auto; }
+
+.usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.tile-value { display: block; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile-label { display: block; margin-top: 4px; font-size: .76rem; color: var(--muted); }
+.tile-label em { font-style: normal; color: var(--block); }
+
+.usage-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 12px 0 0; }
+.usage-breakdown div { border-top: 1px solid var(--line); padding-top: 8px; }
+.usage-breakdown dt { font-size: .74rem; color: var(--muted); }
+.usage-breakdown dd { margin: 2px 0 0; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.usage-bars { display: flex; align-items: flex-end; gap: 2px; height: 90px; margin: 12px 0; padding: 0 1px; }
+.usage-bars .bar { flex: 1; min-width: 3px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .8; }
+.usage-bars .bar.failed { background: var(--block); }
+
+.table-scroll { overflow-x: auto; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.usage-table th, .usage-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.usage-table th { font-size: .72rem; color: var(--muted); font-weight: 600; }
+.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-table .model { color: var(--muted); }
+.usage-table tr.failed td { background: color-mix(in srgb, var(--block) 5%, transparent); }
+.usage-table .fail { color: var(--block); }
+.foot { margin-top: 14px; }
+
+/* --- 지난 점검과 비교 --- */
+.card.history { border-left: 3px solid var(--accent); }
+.history-head { display: flex; align-items: baseline; gap: 10px; }
+.history-head h3 { margin: 0; font-size: 1rem; }
+.history-score {
+  margin: 10px 0 6px; display: flex; align-items: baseline; gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.history-score .from { font-size: 1.2rem; color: var(--muted); }
+.history-score .arrow { color: var(--muted); }
+.history-score .to { font-size: 1.8rem; font-weight: 700; }
+.history-score .to.better { color: var(--pass); }
+.history-score .to.worse { color: var(--block); }
+.history-score .delta { font-size: .82rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.history-score .delta.better { background: color-mix(in srgb, var(--pass) 16%, transparent); color: var(--pass); }
+.history-score .delta.worse { background: color-mix(in srgb, var(--block) 14%, transparent); color: var(--block); }
+.history-changed {
+  margin: 10px 0 0; padding: 10px 12px; font-size: .88rem;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border-radius: 8px;
+}
+.history-codes { margin-top: 10px; display: grid; gap: 6px; }
+.history-codes p { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.history-codes code { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
+.tag { font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 5px; }
+.tag.ok { background: color-mix(in srgb, var(--pass) 16%, transparent); color: var(--pass); }
+.tag.bad { background: color-mix(in srgb, var(--block) 14%, transparent); color: var(--block); }
+
+/* 광고 제목·설명 입력 — 접어두고, 쓸 때만 편다 */
+.copyfields {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-2, transparent);
+}
+.copyfields > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+  list-style: none;
+}
+.copyfields > summary::before { content: '▸ '; color: var(--muted); }
+.copyfields[open] > summary::before { content: '▾ '; }
+.copyfields > summary .opt { font-weight: 400; }
+.copyfields .hint {
+  margin: 0.7rem 0 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.copyfields .row { margin-bottom: 0.9rem; }
+
+/* 글자 수 — 타이핑하는 동안 바로 보이는 게 핵심이다 */
+.counter { list-style: none; margin: 0.45rem 0 0; padding: 0; }
+.counter li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 0.12rem 0;
+}
+.counter .n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.counter .slash { opacity: 0.6; margin-right: 0.3rem; }
+.counter .txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+.counter li.over { color: var(--bad, #d33); }
+.counter li.over .n { color: var(--bad, #d33); }
+.counter .badge {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bad, #d33) 14%, transparent);
+  color: var(--bad, #d33);
+}

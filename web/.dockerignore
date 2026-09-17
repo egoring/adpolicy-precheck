@@ -1,0 +1,8 @@
+# 호스트의 node_modules·빌드 산출물이 COPY . . 로 딸려 들어가
+# deps 단계에서 만든 것을 덮어쓰는 걸 막는다.
+node_modules
+.next
+npm-debug.log*
+.env
+.env.local
+*.tsbuildinfo
