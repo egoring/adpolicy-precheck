@@ -1,0 +1,24 @@
+{
+  "_note": "계정 정지 상태. 이 계정에서는 소재를 읽지도 않아야 한다.",
+  "account": {
+    "customer_id": "9999999999",
+    "status": "SUSPENDED",
+    "descriptive_name": "정지된 계정 (테스트)"
+  },
+  "ads": [
+    {
+      "ad_id": "a-whatever",
+      "final_urls": [
+        "https://example.com/clean"
+      ],
+      "policy_summary": {
+        "approval_status": "DISAPPROVED",
+        "policy_topic_entries": [
+          {
+            "topic": "CLOAKING"
+          }
+        ]
+      }
+    }
+  ]
+}

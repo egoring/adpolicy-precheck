@@ -1,0 +1,144 @@
+{
+  "_note": "⚠️ 손으로 만든 픽스처입니다. 실제 API 응답으로 검증하지 않았습니다. 토큰이 생기면 진짜 응답을 덤프해 이 파일을 교체하세요.",
+  "account": {
+    "customer_id": "1234567890",
+    "status": "ENABLED",
+    "descriptive_name": "가온커머스 (테스트)"
+  },
+  "ads": [
+    {
+      "ad_id": "a-superlative",
+      "campaign_id": "c1",
+      "ad_group_id": "g1",
+      "final_urls": [
+        "https://example.com/superlative"
+      ],
+      "headlines": [
+        "업계 1위 원두"
+      ],
+      "descriptions": [
+        "대한민국 최고의 원두"
+      ],
+      "policy_summary": {
+        "approval_status": "DISAPPROVED",
+        "review_status": "REVIEWED",
+        "policy_topic_entries": [
+          {
+            "topic": "MISREPRESENTATION",
+            "type": "LIMITED",
+            "evidences": [
+              "업계 1위 브랜드"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ad_id": "a-clean-but-flagged",
+      "campaign_id": "c1",
+      "ad_group_id": "g1",
+      "final_urls": [
+        "https://example.com/clean"
+      ],
+      "headlines": [
+        "가온 스페셜티 원두"
+      ],
+      "descriptions": [
+        "로스팅 후 7일 이내 발송"
+      ],
+      "policy_summary": {
+        "approval_status": "DISAPPROVED",
+        "review_status": "REVIEWED",
+        "policy_topic_entries": [
+          {
+            "topic": "TRADEMARK_IN_AD_TEXT",
+            "type": "LIMITED",
+            "evidences": [
+              "가온"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ad_id": "a-thin",
+      "campaign_id": "c2",
+      "ad_group_id": "g2",
+      "final_urls": [
+        "https://example.com/thin"
+      ],
+      "headlines": [
+        "특가 진행중"
+      ],
+      "descriptions": [
+        "지금 신청하세요"
+      ],
+      "policy_summary": {
+        "approval_status": "DISAPPROVED",
+        "review_status": "REVIEWED",
+        "policy_topic_entries": [
+          {
+            "topic": "DESTINATION_CONTENT",
+            "type": "PROHIBITED",
+            "evidences": [
+              "insufficient original content"
+            ]
+          },
+          {
+            "topic": "DESTINATION_NOT_WORKING",
+            "type": "PROHIBITED",
+            "evidences": [
+              "HTTP 404"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ad_id": "a-limited",
+      "campaign_id": "c2",
+      "ad_group_id": "g2",
+      "final_urls": [
+        "https://example.com/clean"
+      ],
+      "headlines": [
+        "가온 원두"
+      ],
+      "descriptions": [
+        "무료배송"
+      ],
+      "policy_summary": {
+        "approval_status": "APPROVED_LIMITED",
+        "review_status": "REVIEWED",
+        "policy_topic_entries": [
+          {
+            "topic": "ALCOHOL",
+            "type": "LIMITED",
+            "constraints": [
+              "KR"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ad_id": "a-ok",
+      "campaign_id": "c1",
+      "ad_group_id": "g1",
+      "final_urls": [
+        "https://example.com/clean"
+      ],
+      "headlines": [
+        "가온 원두"
+      ],
+      "descriptions": [
+        "3만원 이상 무료배송"
+      ],
+      "policy_summary": {
+        "approval_status": "APPROVED",
+        "review_status": "REVIEWED",
+        "policy_topic_entries": []
+      }
+    }
+  ]
+}
