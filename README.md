@@ -96,7 +96,7 @@ OpenAI 호환 엔드포인트면 무엇이든 됩니다.
 이미 받아둔 HuggingFace 캐시가 있으면 compose가 그대로 서빙합니다. `.env`에 캐시 **루트**(`hub`의 부모)를 적고 프로필을 켜면 됩니다.
 
 ```bash
-HF_HOME_HOST=F:/huggingface_cache        # F:\huggingface_cache\hub 인 경우
+HF_HOME_HOST=D:/huggingface_cache        # D:\huggingface_cache\hub 인 경우 (Linux/macOS는 ~/.cache/huggingface)
 LLM_BASE_URL=http://llm:8000/v1
 LLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
 
