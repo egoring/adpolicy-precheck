@@ -5,6 +5,13 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -19,9 +26,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      # OCR 테스트용. 없으면 test_vision의 OCR 테스트가 조용히 건너뛰어진다.
+      - name: Install tesseract (Korean) and CJK fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng fonts-noto-cjk
       - run: pip install -e ".[dev]"
       - run: ruff check src tests
-      - run: pytest -q
+      - run: pytest -q -rs
+      # 골든셋 판정 정확도. 네트워크·LLM 없이 결정적으로 돌므로 지금 100%에서
+      # 하나라도 떨어지면 회귀다. 계정 정지급 오탐은 따로 막는다.
+      - name: Evaluate golden set
+        run: python -m adpolicy.evalkit --fail-under 1.0 --no-critical --md "$GITHUB_STEP_SUMMARY"
 
   web:
     runs-on: ubuntu-latest
@@ -33,6 +50,45 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
+      # 런타임 의존성의 알려진 취약점. 개발 도구는 배포되지 않으므로 제외한다.
+      - run: npm audit --omit=dev --audit-level=high
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # PaddleOCR(~1.5GB)은 빼고 빌드한다 — 확인할 것은 이미지가 빌드되고
+      # 비루트로 떠서 응답하는지다.
+      - name: Build api image
+        run: docker build --build-arg WITH_PADDLE=0 -t adpolicy-api:ci api
+      - name: Build web image
+        run: docker build -t adpolicy-web:ci web
+      - name: Smoke test
+        run: |
+          set -eux
+          mkdir -p data
+          docker run -d --name api -p 8080:8080 -v "$PWD/data:/app/data" adpolicy-api:ci
+          docker run -d --name web -p 3000:3000 adpolicy-web:ci
+          for i in $(seq 1 30); do
+            curl -fsS localhost:8080/healthz && curl -fsS -o /dev/null localhost:3000/ && break
+            sleep 2
+          done
+          curl -fsS localhost:8080/healthz | grep '"ok":true'
+          curl -fsS -o /dev/null localhost:3000/
+          # 두 컨테이너 모두 root가 아닌 사용자로 떠 있어야 한다
+          docker top api -eo pid,user,args | awk '/uvicorn/ && $2 != "root" {ok=1} END {exit !ok}'
+          test "$(docker exec web id -u)" != "0"
+          # 이력 볼륨에 app 사용자가 쓸 수 있어야 한다
+          docker exec -u app api python -c "open('/app/data/.probe','w').write('ok')"
+      - name: Container logs
+        if: failure()
+        run: |
+          docker logs api || true
+          docker logs web || true

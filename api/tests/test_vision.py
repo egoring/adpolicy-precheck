@@ -82,12 +82,18 @@ def test_duplicates_collapse():
 def _banner(lines: list[str], size=(900, 320)) -> bytes:
     from PIL import Image, ImageDraw, ImageFont
 
-    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc"
+    # Black은 fonts-noto-cjk-extra에만 있다. 기본 fonts-noto-cjk(CI 러너)는
+    # Bold·Regular뿐이라, 하나만 보면 CI에서 이 테스트가 늘 건너뛰어진다.
     img = Image.new("RGB", size, "#14213d")
     d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(font_path, 52, index=2)
-    except OSError:  # pragma: no cover - 폰트 없는 환경
+    for weight in ("Black", "Bold", "Regular"):
+        try:
+            font = ImageFont.truetype(
+                f"/usr/share/fonts/opentype/noto/NotoSansCJK-{weight}.ttc", 52, index=2)
+            break
+        except OSError:
+            continue
+    else:  # pragma: no cover - 폰트 없는 환경
         pytest.skip("한국어 폰트 없음")
     for i, line in enumerate(lines):
         d.text((40, 40 + i * 80), line, font=font, fill="#ffd60a")
