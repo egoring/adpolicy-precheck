@@ -15,6 +15,7 @@ import ipaddress
 import socket
 from urllib.parse import urljoin, urlparse
 
+import httpcore
 import httpx
 from selectolax.parser import HTMLParser
 
@@ -153,8 +154,59 @@ async def safe_get(
     raise UnsafeURLError("리디렉션이 너무 많습니다.")
 
 
+class _GuardedBackend(httpcore.AsyncNetworkBackend):
+    """연결 직전에 이름을 풀고, **검사한 그 IP로** 접속한다.
+
+    assert_safe_url만으로는 DNS 재바인딩을 못 막는다. 검사할 때 한 번,
+    httpx가 연결할 때 또 한 번 이름을 물으므로 TTL 0 레코드가 첫 번째엔
+    공인 IP, 두 번째엔 127.0.0.1을 주면 검사는 통과하고 연결은 내부로 간다.
+    여기서 한 번만 풀어 검사와 연결에 같은 IP를 쓴다. TLS의 SNI·인증서
+    검증은 httpcore가 URL의 호스트명으로 따로 하므로 IP로 붙어도 그대로다.
+    """
+
+    def __init__(self, inner: httpcore.AsyncNetworkBackend) -> None:
+        self._inner = inner
+
+    async def connect_tcp(self, host, port, timeout=None, local_address=None,
+                          socket_options=None):
+        try:
+            infos = await asyncio.to_thread(_resolve, host)
+        except socket.gaierror as exc:
+            raise httpcore.ConnectError(str(exc)) from exc
+        except (UnicodeError, ValueError) as exc:
+            raise UnsafeURLError(f"호스트명 형식이 올바르지 않습니다: {host}") from exc
+        ips = [ipaddress.ip_address(info[4][0]) for info in infos]
+        # 하나라도 내부면 거부한다 — assert_safe_url과 같은 기준.
+        if not ips or any(_is_blocked_ip(ip) for ip in ips):
+            raise UnsafeURLError("내부망 주소는 검사할 수 없습니다.")
+        return await self._inner.connect_tcp(
+            str(ips[0]), port, timeout=timeout, local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    async def connect_unix_socket(self, *args, **kwargs):
+        raise UnsafeURLError("유닉스 소켓 연결은 허용하지 않습니다.")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
+class _GuardedTransport(httpx.AsyncHTTPTransport):
+    """연결 계층에 _GuardedBackend를 끼운 기본 전송."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        # httpx는 백엔드를 바꾸는 공개 인자가 없다. 이 속성 이름이 바뀌면
+        # test_guarded_connect_blocks_internal_even_without_precheck가 깨진다.
+        self._pool._network_backend = _GuardedBackend(self._pool._network_backend)
+
+
 def safe_client(**kwargs) -> httpx.AsyncClient:
-    """리디렉션을 절대 자동으로 따라가지 않는 클라이언트. safe_get과 함께 쓴다."""
+    """리디렉션을 절대 자동으로 따라가지 않는 클라이언트. safe_get과 함께 쓴다.
+
+    연결도 _GuardedTransport를 거쳐, 검사한 IP로만 붙는다(DNS 재바인딩 방어).
+    """
+    kwargs.setdefault("transport", _GuardedTransport())
     kwargs.setdefault("timeout", TIMEOUT)
     kwargs.setdefault("headers", {"User-Agent": USER_AGENT, "Accept-Language": "ko,en;q=0.8"})
     kwargs["follow_redirects"] = False
