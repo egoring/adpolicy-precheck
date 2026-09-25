@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { API, apiHeaders } from '../../lib/api';
 import type { UsageReport, UsageRow } from '../../lib/types';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 const RANGES: { label: string; hours: number }[] = [
   { label: '전체', hours: 0 },
@@ -62,7 +62,8 @@ export default function UsagePage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API}/v1/usage?hours=${h}`);
+      const res = await fetch(`${API}/v1/usage?hours=${h}`, { headers: apiHeaders() });
+      if (res.status === 401) throw new Error('API 키가 필요합니다 (NEXT_PUBLIC_API_KEY)');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
     } catch (e) {

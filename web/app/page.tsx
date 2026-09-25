@@ -7,9 +7,9 @@ import CopyFields from './components/CopyFields';
 import HistoryPanel from './components/HistoryPanel';
 import ImagePanel from './components/ImagePanel';
 import ScoreGauge from './components/ScoreGauge';
+import { API, apiHeaders } from '../lib/api';
 import type { CheckResponse, Platform } from '../lib/types';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 /** FastAPI의 detail은 검증 오류일 때만 배열이다. 문자열일 때를 놓치면
  *  504의 "check_images=false로 다시 시도하세요" 같은 안내가 통째로 사라진다. */
@@ -89,7 +89,7 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/v1/check`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders({ 'Content-Type': 'application/json' }),
         signal: controller.signal,
         body: JSON.stringify({
           platform,

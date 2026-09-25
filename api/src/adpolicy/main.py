@@ -8,10 +8,10 @@ import logging
 import os
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import adcopy, analyzer, cloaking, history, ocr_paddle, rules, scoring, vision
+from . import access, adcopy, analyzer, cloaking, history, ocr_paddle, rules, scoring, vision
 from .llm import DEFAULT_BASE_URL, DEFAULT_MODEL, LLMClient
 from .models import (
     CheckHistory,
@@ -94,7 +94,7 @@ async def healthz() -> dict:
     }
 
 
-@app.get("/v1/usage")
+@app.get("/v1/usage", dependencies=[Depends(access.require_api_key)])
 async def usage(hours: float = 0.0) -> dict:
     """Claude 다리가 기록한 토큰 사용량을 그대로 넘겨준다.
 
@@ -129,7 +129,7 @@ async def usage(hours: float = 0.0) -> dict:
         }
 
 
-@app.get("/v1/history")
+@app.get("/v1/history", dependencies=[Depends(access.require_api_key)])
 async def check_history(url: str = "", limit: int = 20) -> dict:
     """그 주소의 점검 이력. url을 비우면 전체 최근 순.
 
@@ -141,7 +141,7 @@ async def check_history(url: str = "", limit: int = 20) -> dict:
             "log_path": history.HISTORY_LOG}
 
 
-@app.get("/v1/policies")
+@app.get("/v1/policies", dependencies=[Depends(access.require_api_key)])
 async def list_policies(platform: Platform = Platform.GOOGLE_ADS) -> dict:
     return {
         "platform": platform,
@@ -363,7 +363,12 @@ async def _prepare_images(snap) -> tuple[list, dict[str, int], str]:
     return assets, stats, note
 
 
-@app.post("/v1/check", response_model=CheckResponse)
+@app.post(
+    "/v1/check",
+    response_model=CheckResponse,
+    # 키 검사가 먼저다 — 키 없는 요청이 남의 속도 한도를 깎으면 안 된다.
+    dependencies=[Depends(access.require_api_key), Depends(access.limit_checks)],
+)
 async def check(req: CheckRequest) -> CheckResponse:
     """전체 상한을 걸고 실행한다. 안쪽 단계마다 타임아웃이 있어도
     합쳐지면 얼마든지 길어질 수 있어서, 바깥에서 한 번 더 막는다."""
