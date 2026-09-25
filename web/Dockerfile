@@ -22,9 +22,13 @@ RUN npm run build
 FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# standalone 서버는 $HOSTNAME에 바인딩한다. 도커는 여기에 컨테이너 ID를 넣는다.
+ENV HOSTNAME=0.0.0.0
 # standalone 출력은 실행에 필요한 것만 담고 있어 dev 의존성이 딸려오지 않는다.
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# 베이스 이미지에 있는 node 사용자(uid 1000)로 돈다 — root일 이유가 없다.
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
+USER node
 EXPOSE 3000
 CMD ["node", "server.js"]
