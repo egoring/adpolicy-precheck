@@ -754,6 +754,9 @@ adpolicy-precheck/
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
 # 753 passed
+
+cd web && npm ci && npm run lint && npm test
+# 12 passed
 ```
 
 네트워크 없이 돕니다. LLM은 각본형 모의 객체(`ScriptedLLM`)로 대체하고, HTML 추출은 고정 문자열로 검증합니다. 가장 중요한 테스트는 **환각 evidence가 실제로 폐기되는지**입니다.

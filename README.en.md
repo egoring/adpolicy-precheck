@@ -186,6 +186,9 @@ Always check `source` on each finding: `rule` was decided by code, `llm` is a mo
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
 # 753 passed
+
+cd web && npm ci && npm run lint && npm test
+# 12 passed
 ```
 
 No network required — the LLM is replaced by a scripted mock, HTML extraction is verified against fixed strings. The most important test is whether **hallucinated evidence is actually discarded**.
