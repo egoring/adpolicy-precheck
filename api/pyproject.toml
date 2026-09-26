@@ -21,7 +21,7 @@ dependencies = [
 # paddleocr 3.x는 API가 완전히 달라져서(.predict, dict 반환) 2.9 계열로 고정한다.
 paddle = [
     "paddlepaddle>=3.0,<4",
-    "paddleocr>=2.9,<3",
+    "paddleocr>=2.9,<4",
 ]
 # MCP 서버로 띄울 때만 필요하다. HTTP API만 쓸 거면 없어도 된다.
 mcp = [
