@@ -112,7 +112,7 @@ export default function Home() {
           랜딩 페이지와 광고 문구를 심사 전에 점검해, 어떤 항목으로 반려될 수 있는지 알려줍니다.
           결정적 룰셋이 먼저 판정하고, LLM 판단은 근거가 실제 페이지에 있을 때만 채택합니다.
         </p>
-        <p className="nav"><Link href="/usage">토큰 사용량 보기 →</Link></p>
+        <p className="nav"><Link href="/batch">여러 건 한꺼번에 점검 →</Link> · <Link href="/usage">토큰 사용량 보기 →</Link></p>
       </header>
 
       <form className="card form" onSubmit={onSubmit}>

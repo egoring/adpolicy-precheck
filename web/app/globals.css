@@ -369,3 +369,12 @@ button.chip.removable:hover { color: var(--ink); border-color: var(--muted); }
 .card.suppressed .findings { margin-top: 12px; opacity: .8; }
 .label .opt, .card.suppressed > summary .opt { color: var(--muted); font-size: .82rem; }
 .evidence.where .locations { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+/* C-4 배치 */
+.parse-errors { margin: 6px 0 0; padding-left: 18px; color: var(--block); font-size: .85rem; }
+.batch-table td.url { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+.batch-table tr.verdict-fail td:nth-child(4) { color: var(--block); font-weight: 600; }
+.batch-table tr.verdict-review td:nth-child(4) { color: var(--warn, #b7791f); font-weight: 600; }
+.batch-detail { margin-top: 12px; }
+.batch-detail > summary { cursor: pointer; font-weight: 600; word-break: break-all; }
+.batch-detail > summary .opt { font-weight: 400; color: var(--muted); font-size: .85rem; }

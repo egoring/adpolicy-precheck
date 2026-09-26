@@ -8,13 +8,14 @@ import logging
 import os
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import (
     access,
     adcopy,
     analyzer,
+    batch,
     cloaking,
     history,
     locate,
@@ -391,6 +392,53 @@ async def check(req: CheckRequest) -> CheckResponse:
             detail=f"점검이 {CHECK_DEADLINE:.0f}초를 넘겨 중단했습니다. "
                    "이미지가 많은 페이지라면 check_images=false로 다시 시도하세요.",
         ) from None
+
+
+@app.post(
+    "/v1/batch",
+    status_code=202,
+    dependencies=[Depends(access.require_api_key)],
+)
+async def submit_batch(body: batch.BatchRequest, request: Request) -> dict:
+    """여러 건을 받아 작업 번호를 바로 돌려준다. 결과는 GET /v1/batch/{job_id}.
+
+    항목마다 속도 한도에서 한 칸씩 가져간다. 자리가 없으면 기다린다 —
+    배치로 분당 한도를 우회하지 못하게.
+    """
+    client = access.client_of(request)
+    try:
+        job = batch.store.create(len(body.items))
+    except batch.StoreFull:
+        raise HTTPException(
+            status_code=503,
+            detail="진행 중인 배치가 너무 많습니다. 끝난 뒤 다시 보내세요.",
+            headers={"Retry-After": "60"},
+        ) from None
+    job.items = [batch.BatchItem(index=i, url=str(r.url)) for i, r in enumerate(body.items)]
+
+    async def runner(req: CheckRequest) -> CheckResponse:
+        await access.wait_for_slot(client)
+        # 단건과 같은 전체 상한. _run_check는 호출 때 찾는다(테스트에서 갈아끼움).
+        return await asyncio.wait_for(_run_check(req), timeout=CHECK_DEADLINE)
+
+    job.task = asyncio.create_task(batch.run(job, body.items, runner))
+    return {"job_id": job.id, "total": len(job.items),
+            "status_url": f"/v1/batch/{job.id}"}
+
+
+@app.get(
+    "/v1/batch/{job_id}",
+    response_model=batch.BatchStatus,
+    dependencies=[Depends(access.require_api_key)],
+)
+async def batch_status(job_id: str) -> batch.BatchStatus:
+    job = batch.store.get(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="없는 작업입니다. 만료됐거나(1시간) 서버가 재시작됐을 수 있습니다.",
+        )
+    return job.snapshot()
 
 
 async def _run_check(req: CheckRequest) -> CheckResponse:

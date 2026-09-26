@@ -573,6 +573,25 @@ def test_kr_items_are_not_labelled_as_google_policy():
 | `GET` | `/v1/policies?platform=google_ads` | 점검 항목 카탈로그 (제재 등급 포함) |
 | `GET` | `/v1/usage?hours=24` | Claude 다리가 기록한 토큰 사용량 |
 | `GET` | `/v1/history?url=…` | 그 주소의 점검 이력 |
+| `POST` | `/v1/batch` | 여러 건 점검 — 바로 `job_id`를 돌려주고 뒤에서 돌린다 |
+| `GET` | `/v1/batch/{job_id}` | 배치 진행 상황과 항목별 결과 |
+
+### 배치 점검 — `/v1/batch`
+
+캠페인 단위로 여러 건을 한 번에 넣습니다. 각 항목은 `/v1/check` 요청과 같습니다(최대 50건).
+
+```bash
+curl -X POST localhost:8080/v1/batch -H 'Content-Type: application/json' \
+  -d '{"items":[{"url":"https://a.example","ad_copy":"업계 1위"},{"url":"https://b.example"}]}'
+# → 202 {"job_id":"…","total":2,"status_url":"/v1/batch/…"}
+curl localhost:8080/v1/batch/<job_id>   # status: queued → running → done
+```
+
+- 항목은 동시에 `BATCH_CONCURRENCY`(기본 2)건씩 돌고, **한 건이 실패해도 나머지는 계속**합니다(`status: error`, `error`에 이유).
+- 속도 한도는 항목마다 한 칸씩 가져갑니다. 한도보다 큰 배치도 받지만 **한도 속도로 흘러갑니다** — 배치로 분당 한도를 우회할 수 없습니다.
+- 작업은 프로세스 메모리에 1시간(`BATCH_TTL`) 보관하고, 동시에 `BATCH_MAX_JOBS`(기본 20)개까지 둡니다. 재시작하면 사라집니다 — 오래 남길 기록은 이력 장부에 이미 한 줄씩 적힙니다.
+- 작업 번호는 추측할 수 없는 무작위 값입니다. 결과에 점검한 URL이 들어 있기 때문입니다.
+- 웹 화면: `/batch` — URL, 광고 문구를 한 줄씩(CSV·스프레드시트 붙여넣기 가능) 넣으면 표로 진행 상황을 보여줍니다.
 
 ### 접근 제어
 

@@ -15,6 +15,9 @@ services:
       API_KEY: ${API_KEY:-}
       # /v1/check 를 클라이언트 IP당 분당 몇 번까지 받을지. 0이면 끈다.
       RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
+      BATCH_CONCURRENCY: ${BATCH_CONCURRENCY:-2}
+      BATCH_TTL: ${BATCH_TTL:-3600}
+      BATCH_MAX_JOBS: ${BATCH_MAX_JOBS:-20}
       # 로컬 vLLM / Ollama / OpenAI 등 OpenAI 호환 엔드포인트면 무엇이든 가능
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
       LLM_MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
