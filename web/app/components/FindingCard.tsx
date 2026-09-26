@@ -16,7 +16,19 @@ const SOURCE_LABEL: Record<Finding['source'], string> = {
 // vlm은 인용할 문구가 없어 자동 검증이 불가능하다. 사용자가 그 사실을 알아야 한다.
 const NEEDS_HUMAN_CHECK: Finding['source'] = 'vlm';
 
-export default function FindingCard({ finding }: { finding: Finding }) {
+/** 계정 정지·경고 누적급은 서버가 무시를 거부한다. 버튼도 보이지 않게 한다. */
+export function canIgnore(finding: Finding): boolean {
+  return (finding.enforcement ?? 'disapprove') === 'disapprove';
+}
+
+export default function FindingCard({
+  finding,
+  action,
+}: {
+  finding: Finding;
+  /** 카드 아래에 붙는 버튼 (무시하기 / 다시 보기). */
+  action?: { label: string; onClick: () => void };
+}) {
   // 같은 지적이 배너 여러 장에서 나오면 카드를 여러 장 만들지 않고 여기 모은다.
   // 예전 API는 image_urls를 안 보내므로 image_url로 떨어진다.
   const images =
@@ -71,6 +83,14 @@ export default function FindingCard({ finding }: { finding: Finding }) {
           <span className="fix-label">수정 방법</span>
           {finding.fix}
         </p>
+      )}
+
+      {action && (
+        <div className="finding-actions">
+          <button type="button" className="ghost small" onClick={action.onClick}>
+            {action.label}
+          </button>
+        </div>
       )}
     </article>
   );

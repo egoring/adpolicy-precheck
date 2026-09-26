@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class Platform(str, Enum):
@@ -238,6 +238,34 @@ class CheckRequest(BaseModel):
             "근거 역검증이 불가능해 가중치가 가장 낮다. 기본 꺼짐."
         ),
     )
+    ignore_codes: list[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description=(
+            "무시할 지적 코드. 근거를 갖춘 '업계 1위'처럼 알고 있는 오탐을 매번 "
+            "보지 않게 한다. 무시한 지적은 점수·판정에서 빠지지만 suppressed로 "
+            "그대로 돌려준다. 계정 정지·경고 누적급 코드는 무시할 수 없다."
+        ),
+    )
+
+    @field_validator("ignore_codes")
+    @classmethod
+    def _known_and_ignorable(cls, codes: list[str]) -> list[str]:
+        # policies가 이 모듈을 import하므로 여기서 늦게 가져온다.
+        from .policies import POLICY_BY_CODE
+
+        norm = list(dict.fromkeys(c.strip().upper() for c in codes if c.strip()))
+        unknown = [c for c in norm if c not in POLICY_BY_CODE]
+        if unknown:
+            raise ValueError(f"알 수 없는 정책 코드: {', '.join(unknown)}")
+        # 계정에 번지는 위반을 가릴 수 있으면 이 도구의 핵심이 무너진다.
+        locked = [c for c in norm
+                  if POLICY_BY_CODE[c].enforcement is not Enforcement.DISAPPROVE]
+        if locked:
+            raise ValueError(
+                f"계정 정지·경고 누적급 항목은 무시할 수 없습니다: {', '.join(locked)}"
+            )
+        return norm
 
 
 class ImageReport(BaseModel):
@@ -306,6 +334,10 @@ class CheckResponse(BaseModel):
     )
     summary: str
     findings: list[Finding]
+    suppressed: list[Finding] = Field(
+        default_factory=list,
+        description="ignore_codes로 무시한 지적. 점수·판정에는 들어가지 않는다.",
+    )
     stats: dict[str, int] = Field(default_factory=dict)
     images: list[ImageReport] = Field(
         default_factory=list, description="점검한 이미지와 거기서 읽어낸 문구"

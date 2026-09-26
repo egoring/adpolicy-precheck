@@ -492,7 +492,11 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
             "ABUSE-CONTENT-CHANGED", f"직전 {baseline} → 지금 {fingerprint}",
         ))
 
-    findings = scoring.merge(rule_findings, llm_findings + vlm_findings, stats)
+    detected = scoring.merge(rule_findings, llm_findings + vlm_findings, stats)
+    # 무시는 합친 뒤에 가른다. 먼저 가르면 같은 코드가 다른 근거로 되살아난다.
+    ignored = set(req.ignore_codes)
+    findings = [f for f in detected if f.code not in ignored]
+    suppressed = [f for f in detected if f.code in ignored]
     v = scoring.verdict(findings)
     risk = scoring.account_risk(findings)
 
@@ -506,13 +510,16 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
         # 숫자가 맞아떨어져야 한다. 이게 없으면 rule+llm+vlm 합과 최종 건수가
         # 어긋나는데 왜 어긋나는지 알 길이 없다.
         "findings_total": len(findings),
+        "suppressed": len(suppressed),
     })
     # 판정을 못 한 것과 문제가 없는 것은 다르다. 못 했으면 그 이유를 남긴다.
     for extra in (image_note, param_note):
         if extra:
             llm_note = (llm_note + "\n" + extra).strip() if llm_note else extra
 
-    codes = [f.code for f in findings]
+    # 이력에는 무시한 것까지 적는다. 무시를 켰다고 '해결됨'으로 보이면 안 된다 —
+    # 페이지는 그대로다.
+    codes = [f.code for f in detected]
     score = scoring.score(findings)
 
     # 지난 점검과의 차이. 비교 자체는 항상 보여준다 — "바뀌었다"는 사실이지
@@ -546,6 +553,7 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
         history=diff,
         summary=scoring.summarize(findings, v),
         findings=findings,
+        suppressed=suppressed,
         stats=stats,
         images=vision.build_reports(assets, findings),
         llm_used=llm_used,

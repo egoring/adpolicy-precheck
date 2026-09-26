@@ -99,6 +99,8 @@ export interface CheckResponse {
   history?: CheckHistory | null;
   summary: string;
   findings: Finding[];
+  /** ignore_codes로 무시한 지적. 점수·판정에는 들어가지 않는다. 예전 API는 안 보낸다. */
+  suppressed?: Finding[];
   stats: Record<string, number>;
   images: ImageReport[];
   llm_used: boolean;

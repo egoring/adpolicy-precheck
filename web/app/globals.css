@@ -357,3 +357,14 @@ button.ghost:hover { color: var(--ink); border-color: var(--muted); }
   background: color-mix(in srgb, var(--bad, #d33) 14%, transparent);
   color: var(--bad, #d33);
 }
+
+/* C-5 무시한 지적 */
+.label { display: block; font-weight: 600; margin-bottom: 4px; }
+.finding-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+button.ghost.small { padding: 6px 12px; font-size: .82rem; }
+button.chip.removable { background: transparent; cursor: pointer; font-weight: 500; }
+button.chip.removable:hover { color: var(--ink); border-color: var(--muted); }
+.card.suppressed > summary { cursor: pointer; font-weight: 600; }
+.card.suppressed > summary .opt { font-weight: 400; }
+.card.suppressed .findings { margin-top: 12px; opacity: .8; }
+.label .opt, .card.suppressed > summary .opt { color: var(--muted); font-size: .82rem; }

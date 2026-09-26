@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import FindingCard from './components/FindingCard';
+import FindingCard, { canIgnore } from './components/FindingCard';
 import AccountRiskPanel from './components/AccountRiskPanel';
 import CopyFields from './components/CopyFields';
 import HistoryPanel from './components/HistoryPanel';
@@ -10,6 +10,7 @@ import ImagePanel from './components/ImagePanel';
 import ScoreGauge from './components/ScoreGauge';
 import { API, apiHeaders } from '../lib/api';
 import { describeError, describeFailure } from '../lib/errors';
+import { useIgnoredCodes, withCode, withoutCode, writeIgnored } from '../lib/ignore';
 import type { CheckResponse, Platform } from '../lib/types';
 
 export default function Home() {
@@ -24,6 +25,7 @@ export default function Home() {
   const [checkImages, setCheckImages] = useState(true);
   const [useVlm, setUseVlm] = useState(false);
   const [compareWithLast, setCompareWithLast] = useState(false);
+  const ignored = useIgnoredCodes();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResponse | null>(null);
   const [error, setError] = useState('');
@@ -74,6 +76,7 @@ export default function Home() {
           check_images: askedFor.images,
           use_vlm: askedFor.vlm,
           compare_with_last: compareWithLast,
+          ignore_codes: ignored,
         }),
       });
       if (!res.ok) throw new Error(await describeFailure(res));
@@ -209,6 +212,27 @@ export default function Home() {
           </label>
         </div>
 
+        {ignored.length > 0 && (
+          <div className="row">
+            <span className="label">
+              무시할 지적 <span className="opt">점수·판정에서 빠집니다. 결과 아래에 따로 보입니다</span>
+            </span>
+            <div className="chips">
+              {ignored.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  className="chip removable"
+                  aria-label={`${code} 무시 해제`}
+                  onClick={() => writeIgnored(withoutCode(ignored, code))}
+                >
+                  {code} ×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="actions">
           <button type="submit" disabled={loading || !url}>
             {loading ? `검사 중… ${elapsed}초` : '점검하기'}
@@ -280,10 +304,37 @@ export default function Home() {
             <ul className="findings">
               {result.findings.map((f, i) => (
                 <li key={`${f.source}-${f.code}-${f.image_url ?? ''}-${i}`}>
-                  <FindingCard finding={f} />
+                  <FindingCard
+                    finding={f}
+                    action={canIgnore(f) ? {
+                      label: '이 지적 무시 (다음 점검부터)',
+                      onClick: () => writeIgnored(withCode(ignored, f.code)),
+                    } : undefined}
+                  />
                 </li>
               ))}
             </ul>
+          )}
+
+          {(result.suppressed?.length ?? 0) > 0 && (
+            <details className="card suppressed">
+              <summary>
+                무시한 지적 {result.suppressed!.length}건 <span className="opt">점수·판정에 반영되지 않았습니다</span>
+              </summary>
+              <ul className="findings">
+                {result.suppressed!.map((f, i) => (
+                  <li key={`s-${f.code}-${i}`}>
+                    <FindingCard
+                      finding={f}
+                      action={{
+                        label: '다시 보기 (무시 해제)',
+                        onClick: () => writeIgnored(withoutCode(ignored, f.code)),
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           <p className="disclaimer">
