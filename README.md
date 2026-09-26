@@ -544,6 +544,22 @@ def test_kr_items_are_not_labelled_as_google_policy():
 | `GET` | `/v1/usage?hours=24` | Claude 다리가 기록한 토큰 사용량 |
 | `GET` | `/v1/history?url=…` | 그 주소의 점검 이력 |
 
+### 접근 제어
+
+기본값은 **이 컴퓨터에서만** 쓰는 구성입니다. docker-compose가 포트를 `127.0.0.1`에만 엽니다.
+
+| 설정 | 기본 | 설명 |
+|---|---|---|
+| `BIND_ADDR` | `127.0.0.1` | 포트를 열 주소. 다른 기기와 나눠 쓰려면 `0.0.0.0` — 이때는 `API_KEY`를 꼭 거세요 |
+| `API_KEY` | (없음) | 넣으면 `/v1/*`가 `X-API-Key` 또는 `Authorization: Bearer` 헤더를 요구합니다. `/healthz`는 열어 둡니다 |
+| `RATE_LIMIT_PER_MIN` | `20` | `/v1/check`를 클라이언트 IP당 분당 몇 번까지 받을지. 넘으면 `429` + `Retry-After`. `0`이면 끔 |
+
+`/v1/check` 한 번이 외부 페이지 여러 개를 가져오고 LLM 토큰을 씁니다. 열어 둔 채 노출되면
+남의 서버가 대신 크롤러·LLM 프록시가 되고, `/v1/history`는 누가 무엇을 점검했는지 보여줍니다.
+
+웹 화면에는 `API_KEY`가 빌드 때 그대로 들어갑니다(`NEXT_PUBLIC_API_KEY`). 즉 **웹 화면을 열 수 있는
+사람은 키도 볼 수 있습니다.** 웹까지 막아야 한다면 앞단 리버스 프록시에서 인증을 거세요.
+
 ---
 
 ## MCP 서버 — 에이전트 앞에 세우는 게이트
@@ -738,6 +754,9 @@ adpolicy-precheck/
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
 # 753 passed
+
+cd web && npm ci && npm run lint && npm test
+# 12 passed
 ```
 
 네트워크 없이 돕니다. LLM은 각본형 모의 객체(`ScriptedLLM`)로 대체하고, HTML 추출은 고정 문자열로 검증합니다. 가장 중요한 테스트는 **환각 evidence가 실제로 폐기되는지**입니다.

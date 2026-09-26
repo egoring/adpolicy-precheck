@@ -17,7 +17,14 @@ import httpx
 import pytest
 
 from adpolicy import cloaking, vision
-from adpolicy.fetcher import UnsafeURLError, _is_blocked_ip, assert_safe_url, safe_get
+from adpolicy.fetcher import (
+    UnsafeURLError,
+    _is_blocked_ip,
+    assert_safe_url,
+    fetch,
+    safe_client,
+    safe_get,
+)
 
 # ---------------------------------------------------------------------------
 # SSRF — 리디렉션 우회
@@ -90,6 +97,51 @@ async def test_guard_runs_on_every_hop_not_just_the_first(public_looking, monkey
             await safe_get(client, f"http://127.0.0.1:{public_looking}/start")
     # 최초 URL이 이미 내부라 첫 검사에서 걸린다 — 그것도 정답이다
     assert seen
+
+
+@pytest.fixture
+def rebinding(monkeypatch, redirector):
+    """DNS 재바인딩 — 처음 물으면 공인 IP, 그다음부터는 127.0.0.1.
+
+    TTL 0짜리 레코드로 실제로 할 수 있는 공격이다. 검사 때 한 번,
+    연결 때 한 번 따로 물으면 검사는 공인 IP를 보고 연결은 내부로 간다.
+    """
+    real = socket.getaddrinfo
+    calls = {"n": 0}
+
+    def fake(host, *a, **k):
+        # anyio는 IDNA 인코딩한 bytes로 묻는다
+        name = host.decode() if isinstance(host, bytes) else host
+        if name != "rebind.test":
+            return real(host, *a, **k)
+        calls["n"] += 1
+        ip = "93.184.216.34" if calls["n"] == 1 else "127.0.0.1"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake)
+    return redirector
+
+
+async def test_dns_rebinding_cannot_reach_internal(rebinding):
+    """검사한 IP와 연결하는 IP가 같아야 한다. 두 번 물으면 뚫린다."""
+    async with safe_client() as client:
+        with pytest.raises(UnsafeURLError):
+            await safe_get(client, f"http://rebind.test:{rebinding}/internal")
+
+
+async def test_guarded_connect_blocks_internal_even_without_precheck(redirector, monkeypatch):
+    """사전 검사를 건너뛰어도 연결 단계에서 막힌다 — 가드가 한 겹이 아니다."""
+    monkeypatch.setattr("adpolicy.fetcher.assert_safe_url", lambda url: None)
+    async with safe_client() as client:
+        with pytest.raises(UnsafeURLError):
+            await safe_get(client, f"http://127.0.0.1:{redirector}/internal")
+
+
+async def test_fetch_reports_rebinding_as_error_not_content(rebinding):
+    """fetch는 예외 대신 fetch_error로 알린다. 내부 응답 본문이 새면 안 된다."""
+    snap = await fetch(f"http://rebind.test:{rebinding}/internal")
+    assert snap.fetch_error
+    assert "secret-token" not in (snap.text or "")
 
 
 async def test_redirect_loop_is_bounded(monkeypatch):

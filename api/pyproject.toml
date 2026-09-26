@@ -8,6 +8,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "httpx>=0.27",
+    # fetcher가 연결 계층(DNS 재바인딩 방어)에 직접 붙는다.
+    "httpcore>=1.0,<2",
     "pydantic>=2.6",
     "selectolax>=0.3.21",
     "pillow>=10.0",

@@ -7,8 +7,14 @@ services:
         WITH_PADDLE: ${WITH_PADDLE:-1}
         PADDLE_REQUIRED: ${PADDLE_REQUIRED:-0}
     ports:
-      - "8080:8080"
+      # 기본은 이 컴퓨터에서만 접속된다. 다른 기기와 나눠 쓰려면 .env에
+      # BIND_ADDR=0.0.0.0 과 함께 API_KEY를 거세요.
+      - "${BIND_ADDR:-127.0.0.1}:8080:8080"
     environment:
+      # 비워 두면 인증 없음(로컬 단독 사용). 값을 넣으면 /v1/* 가 X-API-Key를 요구한다.
+      API_KEY: ${API_KEY:-}
+      # /v1/check 를 클라이언트 IP당 분당 몇 번까지 받을지. 0이면 끈다.
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
       # 로컬 vLLM / Ollama / OpenAI 등 OpenAI 호환 엔드포인트면 무엇이든 가능
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
       LLM_MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
@@ -57,7 +63,9 @@ services:
     profiles: ["llm"]
     image: vllm/vllm-openai:latest
     ports:
-      - "8000:8000"
+      # vLLM은 인증이 없다. api는 compose 네트워크(llm:8000)로 붙으므로
+      # 이 포트는 호스트에서 확인할 때만 쓴다 — 기본은 로컬에만 연다.
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
     volumes:
       # 호스트의 HF 캐시 루트(= hub 폴더의 부모)를 그대로 마운트
       - ${HF_HOME_HOST:-./hf-cache}:/hf-cache
@@ -94,7 +102,7 @@ services:
     profiles: ["vlm"]
     image: vllm/vllm-openai:latest
     ports:
-      - "8001:8000"
+      - "${BIND_ADDR:-127.0.0.1}:8001:8000"
     volumes:
       - ${HF_HOME_HOST:-./hf-cache}:/hf-cache
     environment:
@@ -121,8 +129,10 @@ services:
       context: ./web
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        # 번들에 박혀 브라우저로 내려간다(비밀 아님). API_KEY를 걸었다면 같은 값.
+        NEXT_PUBLIC_API_KEY: ${API_KEY:-}
     ports:
-      - "3000:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
     depends_on:

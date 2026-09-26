@@ -238,6 +238,10 @@ OCR_TARGET_WIDTH = int(os.getenv("OCR_TARGET_WIDTH", "1600"))
 # 이 신뢰도에 못 미치는 줄은 버린다. 사진 위 장식 글자처럼 반쯤 읽히는 구간이
 # 쓰레기 문자열로 남아 화면을 어지럽히고 룰까지 오염시키는 걸 막는다.
 OCR_MIN_LINE_CONF = float(os.getenv("OCR_MIN_LINE_CONF", "55"))
+# 한글이 없는 줄은 더 높게 본다. 실측으로 잡음·사진 결에서 나온 라틴 조각
+# ("OP pt", "mary ar")은 58~69, 실제 영문 배너 문구는 95~97이었다. 한국어는
+# 정상 문구도 87 안팎으로 나와 같은 기준을 쓰면 멀쩡한 줄을 버린다.
+OCR_MIN_LATIN_CONF = float(os.getenv("OCR_MIN_LATIN_CONF", "75"))
 
 
 def _variants(data: bytes):
@@ -358,8 +362,9 @@ def _keep_line(text: str, conf: float) -> bool:
     content = _content_len(text)
     if _HANGUL.search(text):
         return content >= 2
-    # 한글이 없는 줄은 더 엄격하게. 노이즈는 대개 한두 글자 라틴 조각으로 나온다.
-    return content >= 4
+    # 한글이 없는 줄은 더 엄격하게. 노이즈는 대개 한두 글자 라틴 조각으로 나오고,
+    # 길게 나와도 신뢰도가 낮다.
+    return content >= 4 and conf >= OCR_MIN_LATIN_CONF
 
 
 def _score(lines: list[tuple[str, float]]) -> float:

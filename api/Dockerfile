@@ -9,7 +9,14 @@ ARG WITH_PADDLE=1
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    HOME=/root
+    HOME=/home/app
+
+# 서버는 root가 아닌 app 사용자로 돈다. 공격자가 응답을 통제하는 페이지·이미지를
+# 파싱하는 서비스라, 파서 취약점 하나가 컨테이너 root로 이어지지 않게 한다.
+# HOME을 먼저 옮겨 두는 이유: PaddleOCR 모델이 ~/.paddleocr에 받아지는데,
+# /root 아래 두면 app 사용자가 읽지 못한다.
+RUN groupadd --system --gid 1000 app \
+ && useradd --system --uid 1000 --gid app --home-dir /home/app --create-home app
 
 # 이미지 속 문구를 읽기 위한 OCR.
 #  - tesseract: 폴백이자 PaddleOCR을 못 쓰는 빌드의 기본 엔진.
@@ -42,10 +49,10 @@ RUN if [ "$WITH_PADDLE" = "1" ]; then \
         && timeout 900 python -c "\
 from paddleocr import PaddleOCR; \
 PaddleOCR(lang='korean', use_angle_cls=False, show_log=False)" \
-        && test -n "$(ls -A /root/.paddleocr 2>/dev/null)"; } \
+        && test -n "$(ls -A "$HOME/.paddleocr" 2>/dev/null)"; } \
       || echo "모델을 받지 못했습니다. tesseract로 동작합니다 (빌드 로그 참조)" \
            > /app/.paddle_unavailable; \
-      find /root/.paddleocr -name '*.tar' -delete 2>/dev/null || true; \
+      find "$HOME/.paddleocr" -name '*.tar' -delete 2>/dev/null || true; \
       if [ -f /app/.paddle_unavailable ]; then \
         echo "=============================================================="; \
         cat /app/.paddle_unavailable; \
@@ -58,5 +65,11 @@ PaddleOCR(lang='korean', use_angle_cls=False, show_log=False)" \
 # auto = PaddleOCR이 준비돼 있으면 그걸, 아니면 tesseract.
 ENV OCR_ENGINE=auto
 
+RUN mkdir -p /app/data && chown -R app:app /home/app /app/data
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8080
+# 엔트리포인트가 볼륨 소유권만 맞추고 app 사용자로 내려가 CMD를 실행한다.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "adpolicy.main:app", "--host", "0.0.0.0", "--port", "8080"]

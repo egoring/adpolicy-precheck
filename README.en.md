@@ -177,6 +177,8 @@ Always check `source` on each finding: `rule` was decided by code, `llm` is a mo
 | `GET` | `/healthz` | Status + current LLM config |
 | `GET` | `/v1/policies` | Policy catalogue |
 
+**Access control.** By default docker-compose publishes ports on `127.0.0.1` only. To share on a LAN set `BIND_ADDR=0.0.0.0` **and** `API_KEY` — then `/v1/*` requires an `X-API-Key` (or `Authorization: Bearer`) header; `/healthz` stays open. `/v1/check` is rate-limited per client IP (`RATE_LIMIT_PER_MIN`, default 20, `0` disables) and answers `429` with `Retry-After`. The web UI embeds the key at build time, so anyone who can open the UI can read it — put a reverse proxy with auth in front if the UI itself must be protected.
+
 ---
 
 ## Tests
@@ -184,6 +186,9 @@ Always check `source` on each finding: `rule` was decided by code, `llm` is a mo
 ```bash
 cd api && pip install -e ".[dev]" && pytest -q
 # 753 passed
+
+cd web && npm ci && npm run lint && npm test
+# 12 passed
 ```
 
 No network required — the LLM is replaced by a scripted mock, HTML extraction is verified against fixed strings. The most important test is whether **hallucinated evidence is actually discarded**.

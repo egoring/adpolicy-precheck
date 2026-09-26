@@ -82,12 +82,18 @@ def test_duplicates_collapse():
 def _banner(lines: list[str], size=(900, 320)) -> bytes:
     from PIL import Image, ImageDraw, ImageFont
 
-    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc"
+    # Black은 fonts-noto-cjk-extra에만 있다. 기본 fonts-noto-cjk(CI 러너)는
+    # Bold·Regular뿐이라, 하나만 보면 CI에서 이 테스트가 늘 건너뛰어진다.
     img = Image.new("RGB", size, "#14213d")
     d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(font_path, 52, index=2)
-    except OSError:  # pragma: no cover - 폰트 없는 환경
+    for weight in ("Black", "Bold", "Regular"):
+        try:
+            font = ImageFont.truetype(
+                f"/usr/share/fonts/opentype/noto/NotoSansCJK-{weight}.ttc", 52, index=2)
+            break
+        except OSError:
+            continue
+    else:  # pragma: no cover - 폰트 없는 환경
         pytest.skip("한국어 폰트 없음")
     for i, line in enumerate(lines):
         d.text((40, 40 + i * 80), line, font=font, fill="#ffd60a")
@@ -579,9 +585,8 @@ def test_score_prefers_more_readable_content():
     assert vision._score(rich) > vision._score(thin)
 
 
-@needs_ocr
-def test_pure_noise_yields_no_text():
-    """읽을 게 없는 이미지에서 그럴듯한 쓰레기를 만들어내면 안 된다."""
+def _noise_jpeg() -> bytes:
+    """글자가 하나도 없는 잡음 이미지."""
     import random
     from io import BytesIO
 
@@ -599,8 +604,42 @@ def test_pure_noise_yields_no_text():
         )
     buf = BytesIO()
     im.save(buf, format="JPEG", quality=60)
-    text, _ = vision.ocr_image(buf.getvalue())
+    return buf.getvalue()
+
+
+@needs_ocr
+def test_pure_noise_yields_no_text():
+    """읽을 게 없는 이미지에서 그럴듯한 쓰레기를 만들어내면 안 된다."""
+    text, _ = vision.ocr_image(_noise_jpeg())
     assert text.strip() == ""
+
+
+@needs_ocr
+def test_noise_is_rejected_even_when_every_combination_runs():
+    """위 테스트는 시간 예산 안에 도는 조합만 본다. 느린 기계에선 문제의
+    조합(확대본 + psm 11)까지 가지 못해 통과하고, 빠른 CI에선 거기서
+    'OP pt / mary ar'가 나와 실패했다. 그 조합을 직접 돌려 기계 속도와
+    무관하게 확인한다.
+    """
+    upscaled = next(png for name, png in vision._variants(_noise_jpeg())
+                    if name.startswith("x") and "전처리" not in name)
+    assert vision._join(vision._read(upscaled, 11)) == ""
+
+
+# 실측값: 잡음에서 나온 라틴 조각은 58~69, 실제 영문 배너는 95~97.
+@pytest.mark.parametrize("line,conf", [
+    ("OP pt", 64), ("mary ar", 58), ("4  Ae as", 64), ("0000)", 58), ("o wo", 69),
+])
+def test_low_confidence_latin_fragments_are_dropped(line, conf):
+    assert not vision._keep_line(line, conf)
+
+
+@pytest.mark.parametrize("line,conf", [
+    ("SALE 50% OFF", 96), ("FREE SHIPPING", 96), ("Best coffee in town", 95),
+    ("지금 신청하면 100% 보장", 87), ("단 3자리 남음", 93),
+])
+def test_real_banner_lines_are_kept(line, conf):
+    assert vision._keep_line(line, conf)
 
 
 def test_line_filter_falls_back_when_counts_disagree(monkeypatch):

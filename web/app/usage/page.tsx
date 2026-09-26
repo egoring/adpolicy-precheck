@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { API, apiHeaders } from '../../lib/api';
 import type { UsageReport, UsageRow } from '../../lib/types';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 const RANGES: { label: string; hours: number }[] = [
   { label: '전체', hours: 0 },
@@ -52,36 +53,58 @@ function Bars({ rows }: { rows: UsageRow[] }) {
   );
 }
 
+type UsageResult = { data: UsageReport } | { error: string };
+
+async function fetchUsage(h: number): Promise<UsageResult> {
+  try {
+    const res = await fetch(`${API}/v1/usage?hours=${h}`, { headers: apiHeaders() });
+    if (res.status === 401) return { error: 'API 키가 필요합니다 (NEXT_PUBLIC_API_KEY)' };
+    if (!res.ok) return { error: `사용량을 불러오지 못했습니다: HTTP ${res.status}` };
+    return { data: await res.json() };
+  } catch (e) {
+    return {
+      error: e instanceof TypeError
+        ? `API(${API})에 연결할 수 없습니다. 컨테이너가 떠 있는지 확인하세요.`
+        : `사용량을 불러오지 못했습니다: ${String(e)}`,
+    };
+  }
+}
+
 export default function UsagePage() {
   const [hours, setHours] = useState(0);
   const [data, setData] = useState<UsageReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (h: number) => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API}/v1/usage?hours=${h}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData(await res.json());
-    } catch (e) {
-      setError(
-        e instanceof TypeError
-          ? `API(${API})에 연결할 수 없습니다. 컨테이너가 떠 있는지 확인하세요.`
-          : `사용량을 불러오지 못했습니다: ${String(e)}`,
-      );
-    } finally {
-      setLoading(false);
+  const apply = useCallback((r: UsageResult) => {
+    setLoading(false);
+    if ('error' in r) {
+      setError(r.error);
+    } else {
+      setData(r.data);
+      setError('');
     }
   }, []);
 
+  // 로딩 표시를 켜는 건 클릭 핸들러가 한다. effect 안에서 setState를 동기로
+  // 부르면 렌더가 한 번 더 연쇄된다 — effect는 응답이 온 뒤에만 상태를 바꾼다.
+  const reload = (h: number) => {
+    setLoading(true);
+    setError('');
+    fetchUsage(h).then(apply);
+  };
+
   useEffect(() => {
-    load(hours);
+    let alive = true;
+    const tick = () => fetchUsage(hours).then((r) => { if (alive) apply(r); });
+    tick();
     // 30초마다 갱신. 점검을 돌리는 동안 숫자가 올라가는 걸 볼 수 있어야 한다.
-    const t = setInterval(() => load(hours), 30_000);
-    return () => clearInterval(t);
-  }, [hours, load]);
+    const t = setInterval(tick, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [hours, apply]);
 
   const t = data?.totals;
   const rows = data?.recent ?? [];
@@ -97,7 +120,7 @@ export default function UsagePage() {
           Claude 다리가 기록한 실제 사용량입니다. 점검 한 번에 얼마나 쓰는지,
           무엇이 비싼지 여기서 확인하세요.
         </p>
-        <p className="nav"><a href="/">← 점검 화면으로</a></p>
+        <p className="nav"><Link href="/">← 점검 화면으로</Link></p>
       </header>
 
       <div className="range-tabs" role="tablist">
@@ -108,12 +131,16 @@ export default function UsagePage() {
             role="tab"
             aria-selected={hours === r.hours}
             className={hours === r.hours ? 'on' : ''}
-            onClick={() => setHours(r.hours)}
+            onClick={() => {
+              setLoading(true);
+              setError('');
+              setHours(r.hours);
+            }}
           >
             {r.label}
           </button>
         ))}
-        <button type="button" className="refresh" onClick={() => load(hours)}>
+        <button type="button" className="refresh" onClick={() => reload(hours)}>
           새로고침
         </button>
       </div>
