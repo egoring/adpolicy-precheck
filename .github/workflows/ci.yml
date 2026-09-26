@@ -23,7 +23,7 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       # OCR 테스트용. 없으면 test_vision의 OCR 테스트가 조용히 건너뛰어진다.
