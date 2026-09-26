@@ -1,4 +1,4 @@
-FROM node:20-slim AS deps
+FROM node:26-slim AS deps
 WORKDIR /app
 # 락파일까지 복사하고 npm ci를 쓴다. package.json만 넣고 npm install을 돌리면
 # 빌드할 때마다 의존성 트리가 달라져, 로컬에서 되던 게 CI에서 깨진다.
@@ -9,7 +9,7 @@ COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; \
     else npm install --no-audit --no-fund; fi
 
-FROM node:20-slim AS builder
+FROM node:26-slim AS builder
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -19,7 +19,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:20-slim AS runner
+FROM node:26-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # standalone 서버는 $HOSTNAME에 바인딩한다. 도커는 여기에 컨테이너 ID를 넣는다.
