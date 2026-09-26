@@ -10,6 +10,7 @@ docker-compose가 127.0.0.1에만 묶는다. 다른 기기와 나눠 쓰려고 �
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import math
 import os
@@ -94,12 +95,30 @@ def _limit_per_min() -> int:
         return 20
 
 
+def client_of(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+async def wait_for_slot(client: str) -> None:
+    """배치 항목용. 한도가 차 있으면 거절하지 않고 자리가 날 때까지 기다린다.
+
+    배치를 한 번에 선불로 차감하면 기본값(분당 20)으로는 50건 배치를 아예 못
+    받는다. 대신 항목이 시작될 때마다 한 칸씩 가져가게 해, 배치가 한도의
+    속도로 흘러가게 한다 — 한도를 우회하지 못하는 건 같다.
+    """
+    limit = _limit_per_min()
+    if limit <= 0:
+        return
+    while wait := check_limiter.hit(client, limit=limit):
+        await asyncio.sleep(wait)
+
+
 async def limit_checks(request: Request) -> None:
     """/v1/check 전용. RATE_LIMIT_PER_MIN=0이면 끈다."""
     limit = _limit_per_min()
     if limit <= 0:
         return
-    client = request.client.host if request.client else "unknown"
+    client = client_of(request)
     wait = check_limiter.hit(client, limit=limit)
     if wait:
         raise HTTPException(
