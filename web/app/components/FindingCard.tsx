@@ -1,3 +1,4 @@
+import { locationLabel } from '../../lib/locations';
 import type { Finding } from '../../lib/types';
 
 const SEVERITY_LABEL: Record<Finding['severity'], string> = {
@@ -60,6 +61,17 @@ export default function FindingCard({
         <p className="evidence">
           <span className="evidence-label">발견된 근거</span>
           <q>{finding.evidence}</q>
+        </p>
+      )}
+
+      {(finding.locations?.length ?? 0) > 0 && (
+        <p className="evidence where">
+          <span className="evidence-label">위치</span>
+          <span className="locations">
+            {finding.locations!.map((loc) => (
+              <span key={loc} className="chip">{locationLabel(loc)}</span>
+            ))}
+          </span>
         </p>
       )}
 

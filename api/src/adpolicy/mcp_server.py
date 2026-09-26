@@ -63,6 +63,7 @@ def _finding_out(f) -> dict:
         "source": f.source.value,
         "detail": f.detail,
         "evidence": f.evidence,
+        "locations": f.locations,
         "fix": f.fix,
     }
 

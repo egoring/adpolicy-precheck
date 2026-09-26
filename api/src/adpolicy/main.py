@@ -11,7 +11,18 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import access, adcopy, analyzer, cloaking, history, ocr_paddle, rules, scoring, vision
+from . import (
+    access,
+    adcopy,
+    analyzer,
+    cloaking,
+    history,
+    locate,
+    ocr_paddle,
+    rules,
+    scoring,
+    vision,
+)
 from .llm import DEFAULT_BASE_URL, DEFAULT_MODEL, LLMClient
 from .models import (
     CheckHistory,
@@ -493,6 +504,13 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
         ))
 
     detected = scoring.merge(rule_findings, llm_findings + vlm_findings, stats)
+    # 근거가 제목·본문·링크·alt 중 어디 있는지. 합친 뒤에 찾아야 이어 붙인
+    # 근거 조각마다 위치가 나온다.
+    mobile = snaps.get("mobile")
+    locate.annotate(
+        detected, snap, mobile=mobile if mobile is not snap else None,
+        headlines=req.headlines, descriptions=req.descriptions, ad_copy=req.ad_copy,
+    )
     # 무시는 합친 뒤에 가른다. 먼저 가르면 같은 코드가 다른 근거로 되살아난다.
     ignored = set(req.ignore_codes)
     findings = [f for f in detected if f.code not in ignored]

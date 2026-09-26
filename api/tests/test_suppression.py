@@ -113,3 +113,10 @@ def test_toggling_ignore_does_not_read_as_resolved():
     body = _post(ignore_codes=["MIS-SUPERLATIVE"]).json()
     assert body["history"] is not None
     assert "MIS-SUPERLATIVE" not in body["history"]["resolved_codes"]
+
+
+def test_findings_carry_evidence_location():
+    """C-8 — 지적된 문구가 어디 있는지가 응답에 실린다."""
+    body = _post(ad_copy="업계 1위 원두").json()
+    sup = next(f for f in body["findings"] if f["code"] == "MIS-SUPERLATIVE")
+    assert sup["locations"] == ["body", "ad_copy"]

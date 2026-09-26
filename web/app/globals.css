@@ -368,3 +368,4 @@ button.chip.removable:hover { color: var(--ink); border-color: var(--muted); }
 .card.suppressed > summary .opt { font-weight: 400; }
 .card.suppressed .findings { margin-top: 12px; opacity: .8; }
 .label .opt, .card.suppressed > summary .opt { color: var(--muted); font-size: .82rem; }
+.evidence.where .locations { display: inline-flex; gap: 6px; flex-wrap: wrap; }

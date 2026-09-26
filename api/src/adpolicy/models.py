@@ -86,6 +86,14 @@ class Finding(BaseModel):
         default="",
         description="이미지에서 나온 지적이면 어느 이미지인지. 사람이 직접 확인할 수 있어야 한다.",
     )
+    locations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "근거가 나타나는 위치. title·meta_description·link_text·image_alt·form·"
+            "body·image_text(페이지), ad_headline·ad_description·ad_copy(광고). "
+            "모바일 화면에만 있으면 'mobile:' 접두어. 근거가 설명형이면 비어 있다."
+        ),
+    )
     image_urls: list[str] = Field(
         default_factory=list,
         description=(

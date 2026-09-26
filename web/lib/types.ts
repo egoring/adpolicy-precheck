@@ -10,6 +10,8 @@ export interface Finding {
   fix: string;
   /** 계정에 미치는 결과. 반려와 정지는 완전히 다른 사건이다. */
   enforcement?: Enforcement;
+  /** 근거가 나타나는 위치 (C-8). 예전 API는 안 보낸다. */
+  locations?: string[];
   /** 이미지에서 나온 지적이면 어느 이미지인지. 사용자가 직접 열어 확인한다. */
   image_url?: string;
   /** 같은 지적이 나온 이미지 전부. 예전 API는 안 보낸다. */

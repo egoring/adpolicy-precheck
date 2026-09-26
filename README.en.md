@@ -170,6 +170,8 @@ Any OpenAI-compatible endpoint works — local vLLM, Ollama, or OpenAI. Set `LLM
 
 The response carries `findings`, `stats`, and `images` — one entry per inspected image with the text OCR read out of it, **including images with no findings**, so "read it, nothing wrong" is distinguishable from "couldn't read it". `vlm_used` / `vlm_note` say whether image judgement actually ran.
 
+**Where the evidence is.** Each finding carries `locations` — `title`, `meta_description`, `link_text`, `image_alt`, `form`, `body`, `image_text`, `ad_headline`, `ad_description`, `ad_copy`, or `mobile:*` when only the mobile page has it. Matching uses the same normalisation as evidence verification; descriptive evidence gets no location rather than an invented one.
+
 **Known false positives.** Pass `ignore_codes` (e.g. `["MIS-SUPERLATIVE"]`) to drop those findings from score and verdict; they are returned under `suppressed`, not hidden. Account-level codes (suspend/strike) and unknown codes are rejected with 422. Not exposed via MCP on purpose — an agent must not be able to silence its own gate.
 
 Always check `source` on each finding: `rule` was decided by code, `llm` is a model judgement that passed evidence verification. They carry different weight in scoring (LLM ×0.7).
