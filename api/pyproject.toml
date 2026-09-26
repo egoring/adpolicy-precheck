@@ -25,13 +25,13 @@ paddle = [
 ]
 # MCP 서버로 띄울 때만 필요하다. HTTP API만 쓸 거면 없어도 된다.
 mcp = [
-    "mcp>=1.2,<2",
+    "mcp>=1.2,<3",
 ]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
-    "mcp>=1.2,<2",
+    "mcp>=1.2,<3",
 ]
 
 [build-system]
