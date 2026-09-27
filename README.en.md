@@ -170,12 +170,18 @@ Any OpenAI-compatible endpoint works — local vLLM, Ollama, or OpenAI. Set `LLM
 
 The response carries `findings`, `stats`, and `images` — one entry per inspected image with the text OCR read out of it, **including images with no findings**, so "read it, nothing wrong" is distinguishable from "couldn't read it". `vlm_used` / `vlm_note` say whether image judgement actually ran.
 
+**Where the evidence is.** Each finding carries `locations` — `title`, `meta_description`, `link_text`, `image_alt`, `form`, `body`, `image_text`, `ad_headline`, `ad_description`, `ad_copy`, or `mobile:*` when only the mobile page has it. Matching uses the same normalisation as evidence verification; descriptive evidence gets no location rather than an invented one.
+
+**Known false positives.** Pass `ignore_codes` (e.g. `["MIS-SUPERLATIVE"]`) to drop those findings from score and verdict; they are returned under `suppressed`, not hidden. Account-level codes (suspend/strike) and unknown codes are rejected with 422. Not exposed via MCP on purpose — an agent must not be able to silence its own gate.
+
 Always check `source` on each finding: `rule` was decided by code, `llm` is a model judgement that passed evidence verification. They carry different weight in scoring (LLM ×0.7).
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/healthz` | Status + current LLM config |
 | `GET` | `/v1/policies` | Policy catalogue |
+| `POST` | `/v1/batch` | Up to 50 checks at once — returns a `job_id` immediately |
+| `GET` | `/v1/batch/{job_id}` | Batch progress and per-item results |
 
 **Access control.** By default docker-compose publishes ports on `127.0.0.1` only. To share on a LAN set `BIND_ADDR=0.0.0.0` **and** `API_KEY` — then `/v1/*` requires an `X-API-Key` (or `Authorization: Bearer`) header; `/healthz` stays open. `/v1/check` is rate-limited per client IP (`RATE_LIMIT_PER_MIN`, default 20, `0` disables) and answers `429` with `Retry-After`. The web UI embeds the key at build time, so anyone who can open the UI can read it — put a reverse proxy with auth in front if the UI itself must be protected.
 

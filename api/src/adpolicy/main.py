@@ -8,10 +8,22 @@ import logging
 import os
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import access, adcopy, analyzer, cloaking, history, ocr_paddle, rules, scoring, vision
+from . import (
+    access,
+    adcopy,
+    analyzer,
+    batch,
+    cloaking,
+    history,
+    locate,
+    ocr_paddle,
+    rules,
+    scoring,
+    vision,
+)
 from .llm import DEFAULT_BASE_URL, DEFAULT_MODEL, LLMClient
 from .models import (
     CheckHistory,
@@ -382,6 +394,53 @@ async def check(req: CheckRequest) -> CheckResponse:
         ) from None
 
 
+@app.post(
+    "/v1/batch",
+    status_code=202,
+    dependencies=[Depends(access.require_api_key)],
+)
+async def submit_batch(body: batch.BatchRequest, request: Request) -> dict:
+    """여러 건을 받아 작업 번호를 바로 돌려준다. 결과는 GET /v1/batch/{job_id}.
+
+    항목마다 속도 한도에서 한 칸씩 가져간다. 자리가 없으면 기다린다 —
+    배치로 분당 한도를 우회하지 못하게.
+    """
+    client = access.client_of(request)
+    try:
+        job = batch.store.create(len(body.items))
+    except batch.StoreFull:
+        raise HTTPException(
+            status_code=503,
+            detail="진행 중인 배치가 너무 많습니다. 끝난 뒤 다시 보내세요.",
+            headers={"Retry-After": "60"},
+        ) from None
+    job.items = [batch.BatchItem(index=i, url=str(r.url)) for i, r in enumerate(body.items)]
+
+    async def runner(req: CheckRequest) -> CheckResponse:
+        await access.wait_for_slot(client)
+        # 단건과 같은 전체 상한. _run_check는 호출 때 찾는다(테스트에서 갈아끼움).
+        return await asyncio.wait_for(_run_check(req), timeout=CHECK_DEADLINE)
+
+    job.task = asyncio.create_task(batch.run(job, body.items, runner))
+    return {"job_id": job.id, "total": len(job.items),
+            "status_url": f"/v1/batch/{job.id}"}
+
+
+@app.get(
+    "/v1/batch/{job_id}",
+    response_model=batch.BatchStatus,
+    dependencies=[Depends(access.require_api_key)],
+)
+async def batch_status(job_id: str) -> batch.BatchStatus:
+    job = batch.store.get(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="없는 작업입니다. 만료됐거나(1시간) 서버가 재시작됐을 수 있습니다.",
+        )
+    return job.snapshot()
+
+
 async def _run_check(req: CheckRequest) -> CheckResponse:
     # 여러 클라이언트 프로필로 동시에 가져온다 — 클로킹 탐지를 겸한다.
     snaps, raws = await cloaking.probe_profiles(str(req.url))
@@ -492,7 +551,18 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
             "ABUSE-CONTENT-CHANGED", f"직전 {baseline} → 지금 {fingerprint}",
         ))
 
-    findings = scoring.merge(rule_findings, llm_findings + vlm_findings, stats)
+    detected = scoring.merge(rule_findings, llm_findings + vlm_findings, stats)
+    # 근거가 제목·본문·링크·alt 중 어디 있는지. 합친 뒤에 찾아야 이어 붙인
+    # 근거 조각마다 위치가 나온다.
+    mobile = snaps.get("mobile")
+    locate.annotate(
+        detected, snap, mobile=mobile if mobile is not snap else None,
+        headlines=req.headlines, descriptions=req.descriptions, ad_copy=req.ad_copy,
+    )
+    # 무시는 합친 뒤에 가른다. 먼저 가르면 같은 코드가 다른 근거로 되살아난다.
+    ignored = set(req.ignore_codes)
+    findings = [f for f in detected if f.code not in ignored]
+    suppressed = [f for f in detected if f.code in ignored]
     v = scoring.verdict(findings)
     risk = scoring.account_risk(findings)
 
@@ -506,13 +576,16 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
         # 숫자가 맞아떨어져야 한다. 이게 없으면 rule+llm+vlm 합과 최종 건수가
         # 어긋나는데 왜 어긋나는지 알 길이 없다.
         "findings_total": len(findings),
+        "suppressed": len(suppressed),
     })
     # 판정을 못 한 것과 문제가 없는 것은 다르다. 못 했으면 그 이유를 남긴다.
     for extra in (image_note, param_note):
         if extra:
             llm_note = (llm_note + "\n" + extra).strip() if llm_note else extra
 
-    codes = [f.code for f in findings]
+    # 이력에는 무시한 것까지 적는다. 무시를 켰다고 '해결됨'으로 보이면 안 된다 —
+    # 페이지는 그대로다.
+    codes = [f.code for f in detected]
     score = scoring.score(findings)
 
     # 지난 점검과의 차이. 비교 자체는 항상 보여준다 — "바뀌었다"는 사실이지
@@ -546,6 +619,7 @@ async def _run_check(req: CheckRequest) -> CheckResponse:
         history=diff,
         summary=scoring.summarize(findings, v),
         findings=findings,
+        suppressed=suppressed,
         stats=stats,
         images=vision.build_reports(assets, findings),
         llm_used=llm_used,
